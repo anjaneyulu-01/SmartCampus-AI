@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PresenceAI — WebScan</title>
+<style>
+:root{--bg:#0b1220;--card:#0f1724;--accent:#0ea5e9;--accent2:#22c55e}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,Arial,Helvetica;background:linear-gradient(135deg,#05060a,#071126);color:#fff}
+.container{width:920px;margin:28px auto}
+.card{background:rgba(255,255,255,0.03);border-radius:12px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.logo{font-weight:900;font-size:18px;background:linear-gradient(135deg,#22c55e,#3b82f6);-webkit-background-clip:text;background-clip:text;color:transparent}
+.camera-wrap{display:flex;gap:14px}
+.camera-box{flex:1;border-radius:10px;background:#020617;height:420px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+video{width:100%;height:100%;object-fit:cover;display:block}
+.status{position:absolute;left:12px;top:12px;padding:8px 10px;border-radius:10px;background:rgba(0,0,0,0.45);font-weight:800}
+.controls{display:flex;gap:10px;margin-top:12px;align-items:center}
+button{padding:10px 12px;border-radius:10px;border:none;font-weight:800;cursor:pointer}
+.btn-start{background:#22c55e;color:#042;box-shadow:0 6px 20px rgba(34,197,94,0.12)}
+.btn-stop{background:#ef4444;color:#fff}
+.btn-scan{background:#0ea5e9;color:#fff}
+.small{font-size:13px;color:#9ca3af}
+.toast{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(0,0,0,0.6);padding:10px;border-radius:10px;text-align:center;display:none}
+.modal-back{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center}
+.panel{background:#fff;color:#0f172a;padding:16px;border-radius:10px;width:360px}
+.panel input{width:100%;padding:10px;margin:8px 0;border-radius:8px;border:1px solid #e6eef7}
+.note{color:#64748b;font-size:13px;margin-top:8px}
+.top-right{display:flex;gap:8px;align-items:center}
+.link{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#cfe8ff;padding:8px 10px;border-radius:8px}
+.small-muted{font-size:13px;color:#9aa6b3}
+.camera-sidebar{width:300px;display:flex;flex-direction:column;gap:10px}
+.box{background:rgba(255,255,255,0.02);padding:12px;border-radius:8px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <div class="header">
+      <div class="logo">PresenceAI — WebScan</div>
+      <div class="top-right">
+        <button id="openLogin" class="link">Sign In</button>
+        <button id="openDash" class="link">Dashboard</button>
+      </div>
+    </div>
+
+    <div class="camera-wrap">
+      <div class="camera-box" id="cameraBox">
+        <video id="camera" autoplay playsinline muted></video>
+        <div class="status" id="statusBadge">Camera Off</div>
+        <div class="toast" id="toast"></div>
+      </div>
+
+      <aside class="camera-sidebar">
+        <div class="box">
+          <div style="font-weight:800">Controls</div>
+          <div style="margin-top:8px" class="controls">
+            <button id="startBtn" class="btn-start">Start Camera</button>
+            <button id="stopBtn" class="btn-stop hidden">Stop</button>
+          </div>
+          <div style="margin-top:10px">
+            <button id="manualScan" class="btn-scan" style="width:100%">Manual Scan</button>
+          </div>
+          <div style="margin-top:12px" class="small-muted">Auto-scan captures multiple frames to improve recognition accuracy.</div>
+        </div>
+
+        <div class="box">
+          <div style="font-weight:800">Last Recognized</div>
+          <ul id="recognizedList" style="margin-top:8px;font-size:14px;line-height:1.4;color:#cfe8ff;max-height:120px;overflow-y:auto"></ul>
+        </div>
+
+        <div class="box">
+          <div style="font-weight:800">Account</div>
+          <div id="acctName" style="margin-top:8px">Guest</div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button id="btnOpenLogin" class="link">Sign In</button>
+            <button id="btnSignOut" class="link hidden">Sign Out</button>
+          </div>
+        </div>
+
+        <div class="box">
+          <div style="font-weight:800">Quick Actions</div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+            <button id="btnRegenerate" class="link">Regenerate Mock Users</button>
+            <button id="btnExport" class="link">Export Snapshot</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="controls" style="margin-top:14px">
+      <div class="small">Status: <span id="statusSmall">idle</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Login modal -->
+<div class="modal-back" id="loginModal">
+  <div class="panel">
+    <h3 style="margin:0 0 6px 0">Sign in</h3>
+    <input id="loginUser" placeholder="username (hod / teacher1 / sai)" />
+    <input id="loginPass" type="password" placeholder="password" />
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="doLogin" style="flex:1;background:#0ea5e9;color:#fff;border:none;padding:10px;border-radius:8px;font-weight:800">Login</button>
+      <button id="closeLogin" style="flex:1;background:transparent;border:1px solid #e6eef7;padding:10px;border-radius:8px;font-weight:800">Close</button>
+    </div>
+    <div class="note">Demo credentials: hod/hodpass | teacher1/teacher1pass | sai/92460118732</div>
+    <div id="loginMsg" class="note" style="margin-top:8px;color:#ef4444"></div>
+  </div>
+</div>
+
+<script>
+const camera = document.getElementById('camera');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const manualScan = document.getElementById('manualScan');
+const statusBadge = document.getElementById('statusBadge');
+const toast = document.getElementById('toast');
+const loginModal = document.getElementById('loginModal');
+const openLogin = document.getElementById('openLogin');
+const closeLogin = document.getElementById('closeLogin');
+const doLogin = document.getElementById('doLogin');
+const btnOpenLogin = document.getElementById('btnOpenLogin');
+const btnSignOut = document.getElementById('btnSignOut');
+const acctName = document.getElementById('acctName');
+const statusSmall = document.getElementById('statusSmall');
+const btnRegenerate = document.getElementById('btnRegenerate');
+const btnExport = document.getElementById('btnExport');
+
+let stream = null;
+let scanning = false;
+let scanInterval = null;
+let scanInProgress = false;
+
+// Recent recognized dedupe map (studentId -> timestamp ms)
+const recentRecognized = new Map();
+const RECENT_WINDOW_MINUTES = 60; // consider a recognition 'duplicate' within last 60 minutes
+
+// API base
+let API_BASE;
+if (location.protocol === 'file:' || location.port === "5500") {
+  API_BASE = "http://127.0.0.1:8000";
+} else {
+  API_BASE = location.origin;
+}
+console.log("API_BASE =", API_BASE);
+
+// ✅ Last recognized list updater (dedupes within RECENT_WINDOW_MINUTES)
+function updateRecognizedList(studentId, status) {
+  if (!studentId) return;
+  // cleanup old entries
+  const now = Date.now();
+  for (const [k, ts] of Array.from(recentRecognized.entries())) {
+    if (now - ts > RECENT_WINDOW_MINUTES * 60 * 1000) recentRecognized.delete(k);
+  }
+  if (recentRecognized.has(studentId)) {
+    // already shown within the window -> skip
+    return;
+  }
+  recentRecognized.set(studentId, now);
+
+  const ul = document.getElementById('recognizedList');
+  if (!ul) return;
+  const ts = new Date().toLocaleTimeString();
+  const li = document.createElement('li');
+  li.style.marginBottom = '6px';
+  li.textContent = `${ts} — ${studentId} (${status})`;
+  ul.insertBefore(li, ul.firstChild);
+  while (ul.children.length > 8) ul.removeChild(ul.lastChild);
+}
+
+function showToast(msg, time=2200){
+  toast.innerText = msg;
+  toast.style.display = 'block';
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=> toast.style.display = 'none', time);
+}
+
+async function startCamera(){
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+    camera.srcObject = stream;
+    statusBadge.innerText = 'Live — scanning';
+    startBtn.classList.add('hidden');
+    stopBtn.classList.remove('hidden');
+    scanning = true;
+    statusSmall.innerText = 'scanning';
+    // interval captures frames periodically; keep small enough for responsiveness
+    scanInterval = setInterval(()=> {
+      if(!scanInProgress) autoScanFrames(4, 140);
+    }, 3000);
+  } catch (e){
+    alert('Camera access error: ' + e);
+  }
+}
+
+function stopCamera(){
+  scanning = false;
+  if(stream){
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  camera.srcObject = null;
+  statusBadge.innerText = 'Camera Off';
+  startBtn.classList.remove('hidden');
+  stopBtn.classList.add('hidden');
+  if(scanInterval){ clearInterval(scanInterval); scanInterval = null; }
+  statusSmall.innerText = 'idle';
+}
+
+async function captureFrameBlob(){
+  const v = camera;
+  const cvs = document.createElement('canvas');
+  // fallback dimensions if videoWidth/Height not ready
+  cvs.width = v.videoWidth || 640;
+  cvs.height = v.videoHeight || 480;
+  const ctx = cvs.getContext('2d');
+  ctx.drawImage(v, 0, 0, cvs.width, cvs.height);
+  return new Promise(resolve => cvs.toBlob(resolve, 'image/jpeg', 0.85));
+}
+
+async function autoScanFrames(n=4, delay=140){
+  if(!scanning || !stream) return;
+  scanInProgress = true;
+  const frames = [];
+  try {
+    for(let i=0;i<n;i++){
+      const blob = await captureFrameBlob();
+      frames.push(blob);
+      await new Promise(r => setTimeout(r, delay));
+    }
+    await postFrames(frames);
+  } catch(e){
+    console.error("scan error", e);
+  } finally {
+    scanInProgress = false;
+  }
+}
+
+/* 
+  no-op safety wrapper removed for clarity; postFrames handles upload
+*/
+
+// ------------------- POST frames to backend -------------------
+async function postFrames(blobs){
+  if(!Array.isArray(blobs) || blobs.length === 0) return;
+  const fd = new FormData();
+  blobs.forEach((b,i) => fd.append('files', b, `frame_${Date.now()}_${i}.jpg`));
+  try {
+    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/api/checkin`, { method: 'POST', body: fd });
+    const ct = res.headers.get('content-type') || '';
+    let j = null;
+    if (ct.includes('application/json')) {
+      j = await res.json().catch(()=>null);
+    } else {
+      j = null;
+    }
+
+    if(res.ok){
+      if(j && j.success){
+        // server might say 'already recorded' — only update UI if server is reporting successful new record
+        if (j.message && j.message.toLowerCase && j.message.toLowerCase().includes('already recorded')) {
+          // don't duplicate in the recent list, but still inform user
+          showToast(`Already recorded: ${j.student_id}`, 2000);
+        } else {
+          showToast(`Recognized: ${j.student_id} (${j.status})`);
+          updateRecognizedList(j.student_id, j.status || 'Present');
+        }
+        // keep students list in sync if page expects it
+        try { await loadStudents(); } catch(e){/* ignore */ }
+      } else {
+        if (j && j.message) {
+          showToast(j.message, 2000);
+          console.log('checkin info', j);
+        } else {
+          console.log('checkin returned', j);
+        }
+      }
+    } else {
+      const detail = (j && (j.detail || j.message)) ? (j.detail || j.message) : `HTTP ${res.status}`;
+      console.warn('checkin failed', detail);
+      showToast('Checkin failed: ' + detail, 2500);
+    }
+  } catch(e){
+    console.warn('postFrames error', e);
+    showToast('Network error during checkin', 1800);
+  }
+}
+
+// Helper: convert Blob -> base64 (strips header)
+function blobToBase64(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = (e) => reject(e);
+    reader.onloadend = () => {
+      const dataUrl = reader.result;
+      const b64 = (dataUrl && dataUrl.split(',')[1]) || '';
+      resolve(b64);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Manual one-frame scan: use WS if available, otherwise fall back to HTTP POST
+manualScan.addEventListener('click', async ()=>{
+  if(!stream) { showToast('Start camera first'); return; }
+  if(scanInProgress) return;
+  scanInProgress = true;
+  try {
+    const blob = await captureFrameBlob();
+
+    // If WS is opening, wait briefly for it to become OPEN; if still not open, fall back to HTTP.
+    const trySendViaWS = async () => {
+      if (window.pa_ws && window.pa_ws.readyState === WebSocket.OPEN){
+        try {
+          const b64 = await blobToBase64(blob);
+          window.pa_ws.send(JSON.stringify({ img: b64 }));
+          showToast('Frame sent via WebSocket');
+          return true;
+        } catch (e) {
+          console.warn('WS send failed', e);
+          return false;
+        }
+      }
+      if (window.pa_ws && window.pa_ws.readyState === WebSocket.CONNECTING) {
+        await new Promise(r => setTimeout(r, 300));
+        if (window.pa_ws.readyState === WebSocket.OPEN){
+          try {
+            const b64 = await blobToBase64(blob);
+            window.pa_ws.send(JSON.stringify({ img: b64 }));
+            showToast('Frame sent via WebSocket');
+            return true;
+          } catch (e) {
+            console.warn('WS send failed after connect', e);
+            return false;
+          }
+        }
+      }
+      return false;
+    };
+
+    const sent = await trySendViaWS();
+    if (!sent) {
+      await postFrames([blob]);
+    }
+  } catch(e){
+    console.error('manual scan error', e);
+  } finally {
+    scanInProgress = false;
+  }
+});
+
+// start/stop buttons
+startBtn.addEventListener('click', startCamera);
+stopBtn.addEventListener('click', stopCamera);
+
+// login modal wiring
+openLogin.addEventListener('click', ()=> loginModal.style.display = 'flex');
+btnOpenLogin.addEventListener('click', ()=> loginModal.style.display = 'flex');
+closeLogin.addEventListener('click', ()=> loginModal.style.display = 'none');
+
+doLogin.addEventListener('click', async ()=>{
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value.trim();
+  const msg = document.getElementById('loginMsg');
+  msg.innerText = '';
+  if(!u || !p){ msg.innerText = 'enter username & password'; return; }
+  try {
+    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/api/login`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username: u, password: p })
+    });
+    if(!res.ok){
+      const e = await res.json().catch(()=>({detail:'login failed'}));
+      msg.innerText = e.detail || 'Login failed';
+      return;
+    }
+    const j = await res.json();
+    localStorage.setItem('pa_token', j.token);
+    localStorage.setItem('pa_role', j.role || '');
+    localStorage.setItem('pa_user', j.display_name || u);
+    if (j.student_id) localStorage.setItem('pa_student_id', j.student_id);
+
+    document.getElementById('acctName').innerText = j.display_name || u;
+    btnOpenLogin.classList.add('hidden');
+    btnSignOut.classList.remove('hidden');
+    loginModal.style.display = 'none';
+    loadStudents();
+    showToast('Logged in');
+
+    // Reinitialize WS so it includes token in query string (if your backend later checks it).
+    try {
+      if (window.pa_ws) {
+        try { window.pa_ws.close(); } catch(e){ /* ignore */ }
+        window.pa_ws = null;
+      }
+      setTimeout(initWS, 120);
+    } catch(e){
+      console.warn('reinit ws after login failed', e);
+    }
+  } catch (e){
+    console.warn('login error', e);
+    msg.innerText = 'Login error';
+  }
+});
+
+document.getElementById('btnSignOut').addEventListener('click', ()=>{
+  localStorage.removeItem('pa_token');
+  localStorage.removeItem('pa_role');
+  localStorage.removeItem('pa_user');
+  localStorage.removeItem('pa_student_id');
+  document.getElementById('acctName').innerText = 'Guest';
+  btnOpenLogin.classList.remove('hidden');
+  btnSignOut.classList.add('hidden');
+  showToast('Signed out');
+  loadStudents();
+});
+
+// ---------------- API helper with token ----------------
+function getToken(){ return localStorage.getItem('pa_token'); }
+async function apiFetch(path, opts = {}) {
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  const t = getToken();
+  if (t) opts.headers['Authorization'] = 'Bearer ' + t;
+  const absolute = path.startsWith('http') ? path : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+  const res = await fetch(absolute, opts);
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) {
+    return await res.json().catch(()=>null);
+  }
+  return res;
+}
+
+// students preview
+let students = [];
+async function loadStudents(){
+  try {
+    const data = await apiFetch('/api/students');
+    students = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.warn('loadStudents', e);
+    students = [];
+  }
+  renderPresencePreview();
+}
+function renderPresencePreview(){
+  const preview = students.slice(0,6).map(s=>`${s.name} (${s.class||'N/A'})`).join(' • ');
+  statusSmall.innerText = preview || 'no data';
+}
+
+// websocket live updates
+function initWS(){
+  try {
+    let wsUrl;
+    try {
+      if (API_BASE && (API_BASE.startsWith('http://') || API_BASE.startsWith('https://'))) {
+        wsUrl = API_BASE.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws/events';
+      } else {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        wsUrl = `${proto}://${location.hostname}${location.port ? ':' + location.port : ''}/ws/events`;
+      }
+    } catch (e){
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      wsUrl = `${proto}://${location.hostname}${location.port ? ':' + location.port : ''}/ws/events`;
+    }
+
+    const tok = getToken();
+    if (tok) {
+      const sep = wsUrl.includes('?') ? '&' : '?';
+      wsUrl = wsUrl + sep + 'token=' + encodeURIComponent(tok);
+    }
+
+    const ws = new WebSocket(wsUrl);
+    window.pa_ws = ws;
+
+    ws.onopen = ()=> {
+      console.log('WS connected', wsUrl);
+      showToast('WS connected', 1200);
+    };
+    ws.onmessage = (ev)=> {
+      try {
+        const m = JSON.parse(ev.data);
+        if (m.type === 'presence' && m.payload) {
+          const p = m.payload;
+          // Avoid adding duplicate entries to last-recognized list
+          updateRecognizedList(p.student_id, p.status);
+          showToast(`Event: ${p.student_id} • ${p.status}`, 1600);
+          loadStudents();
+        } else if (m.type === 'recognized') {
+          const sid = m.student_id || m.studentId || (m.payload && (m.payload.student_id || m.payload.studentId));
+          const conf = typeof m.confidence === 'number' ? (m.confidence) : (m.conf || 0);
+          updateRecognizedList(sid || '(unknown)', 'Present');
+          showToast(`Recognized: ${sid || '(unknown)'} ${(conf ? '(' + conf.toFixed(2) + ')' : '')}`, 2200);
+          loadStudents();
+        } else if (m.type === 'unknown') {
+          showToast('Face unknown', 1600);
+        } else if (m.type === 'error') {
+          showToast('WS error: ' + (m.message || 'error'), 2000);
+        } else if (m.type === 'info' || m.type === 'ack') {
+          console.log('WS info/ack', m);
+        } else {
+          console.log('WS msg', m);
+        }
+      } catch(e){
+        console.warn('ws parse', e);
+      }
+    };
+    ws.onclose = ()=> {
+      console.log('WS closed');
+      window.pa_ws = null;
+      showToast('WS disconnected', 1200);
+      setTimeout(initWS, 2000);
+    };
+    ws.onerror = (err)=> {
+      console.warn('WS error', err);
+      showToast('WS error', 1400);
+    };
+  } catch(e){ console.warn('initWS', e); }
+}
+
+setTimeout(initWS, 600);
+
+// init
+(function init(){
+  const name = localStorage.getItem('pa_user') || 'Guest';
+  acctName.innerText = name;
+  if(localStorage.getItem('pa_token')){
+    btnOpenLogin.classList.add('hidden');
+    btnSignOut.classList.remove('hidden');
+  }
+  loadStudents();
+})();
+
+</script>
+</body>
+</html>
