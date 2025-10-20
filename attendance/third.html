@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PresenceAI — Unified Demo</title>
+  <style>
+    /* General Layout */
+    :root{
+      --bg:#f8fafc;
+      --muted:#64748b;
+      --card:#fff;
+      --accent1: #00FFB9;
+      --accent2: #008CFF;
+      --glass: rgba(255,255,255,0.65);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      color: #1e293b;
+      display: flex;
+      background: linear-gradient(180deg, var(--bg), #eef6ff 1200px);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      min-height: 100vh;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 260px;
+      background: var(--card);
+      border-right: 1px solid #e5e7eb;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      gap: 0.6rem;
+      position: relative;
+    }
+
+    .logo {
+      background: linear-gradient(135deg,var(--accent2), #06b6d4);
+      color: #fff;
+      font-weight: 800;
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      font-size: 1.05rem;
+      margin-bottom: .6rem;
+      box-shadow: 0 6px 18px rgba(3,105,161,0.08);
+    }
+
+    .title { margin: 0 0 0.5rem; font-size: 1.1rem; letter-spacing: 0.2px; }
+
+    .class-selector {
+      margin-bottom: 1rem;
+      padding: 0.6rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #fbfdff;
+      font-weight:600;
+      transition: all .18s ease;
+    }
+    .class-selector:focus { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(2,132,199,0.06); }
+
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      flex-grow: 1;
+    }
+
+    .nav-link {
+      padding: 0.75rem;
+      text-align: left;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background: #f7fbff;
+      font-weight: 700;
+      color: #0f172a;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      transition: all .18s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .nav-link::after{
+      content:'';
+      position:absolute;
+      left:0; top:0; bottom:0;
+      width:4px;
+      background: linear-gradient(180deg,var(--accent1),var(--accent2));
+      transform: scaleY(0);
+      transform-origin: top;
+      transition: transform .22s ease;
+      border-radius:6px;
+    }
+
+    .nav-link:hover { transform: translateX(6px); box-shadow: 0 8px 20px rgba(2,132,199,0.04); }
+    .nav-link.active {
+      background: linear-gradient(90deg, rgba(0,255,185,0.09), rgba(0,140,255,0.06));
+      color: #023047;
+    }
+    .nav-link.active::after { transform: scaleY(1); }
+
+    .legend {
+      margin-top: 1.1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height:1.6;
+    }
+    .legend .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+    }
+    .legend .present { background: #16a34a; }
+    .legend .absent { background: #ef4444; }
+    .legend .late { background: #f59e0b; }
+    .legend .suspicious { background: #e11d48; }
+
+    /* MAIN */
+    .main {
+      flex-grow: 1;
+      padding: 28px;
+      overflow-y: auto;
+    }
+
+    .page { display: none; animation: fadeIn 0.28s ease-in-out; }
+    .page.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .page-header { margin-bottom: 1.25rem; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .page-header h1 { margin:0; font-size:1.3rem; }
+
+    .stats {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: linear-gradient(180deg,var(--card), #fbfdff);
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(3,105,161,0.04);
+      flex: 1;
+      font-size: 1rem;
+      font-weight: 600;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:.5rem;
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .stat-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(3,105,161,0.06); }
+    .stat-card .number { font-size:1.35rem; color:#0ea5e9; font-weight:800; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: var(--card);
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(2,132,199,0.04);
+      transition: transform .15s ease;
+    }
+    .card h3 { margin:0 0 8px 0; }
+
+    /* Buttons */
+    .btn-primary {
+      margin-top: 1rem;
+      padding: 0.6rem 1rem;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(90deg, var(--accent1), var(--accent2));
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform .12s ease;
+    }
+    .btn-primary:active { transform: translateY(1px); }
+
+    .btn-ghost {
+      padding: 0.5rem 0.8rem;
+      border-radius: 8px;
+      border:1px solid #e6eef7;
+      background: #fff;
+      cursor:pointer;
+      font-weight:700;
+    }
+
+    /* Presence Map */
+    .presence-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 1rem;
+    }
+
+    .presence-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 0.75rem;
+      text-align: center;
+      box-shadow: 0 6px 18px rgba(2,132,199,0.04);
+      transition: transform 0.22s cubic-bezier(.2,.9,.3,1), box-shadow 0.22s;
+      will-change: transform;
+    }
+
+    .presence-card:hover {
+      transform: translateY(-6px) scale(1.01);
+      box-shadow: 0 18px 34px rgba(2,132,199,0.08);
+    }
+
+    .presence-card img {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      margin-bottom: 0.5rem;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 2px #e2e8f0;
+    }
+
+    .presence-card .status {
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      color: #fff;
+      text-transform: capitalize;
+      font-weight:700;
+    }
+
+    .presence-card .name {
+      font-weight:700;
+      margin-bottom:6px;
+      font-size:0.95rem;
+      color:#0f172a;
+    }
+
+    .status.present { background: #16a34a; }
+    .status.absent { background: #ef4444; }
+    .status.late { background: #f59e0b; }
+    .status.suspicious { background: #e11d48; }
+
+    /* Leaderboard */
+    .leaderboard { margin-top: 1rem; font-size: 0.9rem; }
+    .leaderboard div {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid #eef2f7;
+      align-items:center;
+    }
+
+    /* Timeline */
+    .timeline-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .timeline-entry {
+      background: var(--card);
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(2,132,199,0.04);
+      font-size: 0.9rem;
+    }
+
+    /* Trust Score Layout */
+    .trust-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    .top-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .top-card {
+      background: linear-gradient(180deg,#ffffff, #fbfdff);
+      border-radius: 12px;
+      padding: 0.75rem;
+      text-align: center;
+      box-shadow: 0 6px 18px rgba(2,132,199,0.04);
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .top-card:hover { transform: translateY(-6px); box-shadow: 0 20px 38px rgba(2,132,199,0.06); }
+    .top-card img { width:48px; height:48px; border-radius:999px; margin-bottom:8px; }
+    .top-card .score { margin-top: 0.25rem; font-size: 0.95rem; color: #0ea5e9; font-weight:800; }
+
+    /* Scrollable leaderboard */
+    .scrollable {
+      max-height: 420px;
+      overflow-y: auto;
+      border-top: 1px solid #e5e7eb;
+      margin-top: 1rem;
+      padding-top: 8px;
+    }
+
+    /* Insights page layout */
+    .insights-container {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .analytics-list {
+      background: var(--card);
+      padding: 12px;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(2,132,199,0.04);
+      max-height: calc(100vh - 170px);
+      overflow-y: auto;
+    }
+
+    .searchbox {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      margin-bottom:10px;
+    }
+    .searchbox input {
+      flex:1;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid #e6eef7;
+      background:#fbfdff;
+      font-weight:600;
+    }
+
+    .analytics-item {
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      transition: transform .15s ease, box-shadow .15s ease;
+      border:1px solid transparent;
+      background: linear-gradient(180deg,#ffffff, #fbfdff);
+    }
+
+    .analytics-item:hover { transform: translateY(-6px); box-shadow: 0 14px 34px rgba(2,132,199,0.06); }
+    .analytics-item.selected { border-color: rgba(2,132,199,0.12); box-shadow: 0 20px 46px rgba(2,132,199,0.07); }
+
+    .analytics-item .meta { flex:1; }
+    .analytics-title { font-weight:800; font-size:0.95rem; }
+    .analytics-desc { font-size:0.85rem; color:var(--muted); margin-top:4px; }
+
+    .analytics-badge {
+      background: linear-gradient(90deg,var(--accent1),var(--accent2));
+      color:#fff;
+      padding:6px 8px;
+      border-radius:999px;
+      font-weight:800;
+      font-size:0.85rem;
+      min-width:48px;
+      text-align:center;
+      box-shadow: 0 8px 20px rgba(2,132,199,0.06);
+      transform-origin:center;
+      transition: transform .18s ease;
+    }
+    .analytics-badge:active { transform: scale(.98); }
+
+    /* INSIGHTS RIGHT: make this area scrollable independently */
+    .insights-right {
+      background: var(--card);
+      padding: 14px;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(2,132,199,0.04);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      max-height: calc(100vh - 112px); /* <- ensures it doesn't push page scroll */
+      overflow-y: auto; /* desktop scroll only within insight card */
+      scroll-behavior: smooth;
+    }
+
+    .insights-right .topbar {
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+    }
+
+    .charts-row {
+      display:grid;
+      grid-template-columns: 1fr 360px;
+      gap: 12px;
+      align-items:start;
+      min-height:320px;
+    }
+
+    .chart-card {
+      background: #fff;
+      padding: 12px;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(3,105,161,0.03);
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .chart-large { height:320px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+    .chart-small { height:320px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+
+    .chart-large canvas, .chart-small canvas { width:100%; height:100%; display:block; border-radius:8px; }
+
+    .analytics-details {
+      margin-top: 6px;
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+      flex-wrap:wrap;
+    }
+
+    .details-card {
+      background:#fff;
+      padding:12px;
+      border-radius:10px;
+      box-shadow: 0 6px 18px rgba(3,105,161,0.03);
+      width: calc(50% - 6px);
+    }
+    .details-card h4 { margin:0 0 8px 0; font-size:0.95rem; }
+    .small-list { font-size:0.9rem; }
+    .small-list div { padding:6px 0; display:flex; justify-content:space-between; border-bottom: 1px dashed #eef2f7; }
+
+    /* Trust card layout inside insights */
+    .trust-card {
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      align-items:center;
+      background: linear-gradient(180deg, #ffffff, #f8fdff);
+      padding: 14px;
+      border-radius: 12px;
+      box-shadow: 0 12px 30px rgba(2,132,199,0.06);
+    }
+    .trust-big {
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+    }
+    .trust-number {
+      font-size:48px;
+      font-weight:900;
+      color: #0ea5e9;
+    }
+    .trust-sub { color:var(--muted); font-weight:700; }
+
+    .tips-list { display:flex; flex-direction:column; gap:8px; }
+    .tip {
+      padding:10px;
+      border-radius:10px;
+      background: linear-gradient(90deg, rgba(0,140,255,0.06), rgba(0,255,185,0.04));
+      font-weight:700;
+    }
+
+    /* quick controls row */
+    .controls { display:flex; gap:8px; align-items:center; }
+
+    /* subtle pulsing for live badges */
+    .live-badge {
+      display:inline-block;
+      padding:6px 8px;
+      border-radius:999px;
+      background: linear-gradient(90deg,#ff7a7a, #ffb27a);
+      color:white;
+      font-weight:800;
+      animation: pulse 2s infinite ease-in-out;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity:1; }
+      50% { transform: scale(1.04); opacity:0.92; }
+      100% { transform: scale(1); opacity:1; }
+    }
+
+    /* tiny utility */
+    .muted { color:var(--muted); font-weight:600; }
+
+    /* custom scrollbar inside insights-right for a nicer feel */
+    .insights-right::-webkit-scrollbar { width:10px; }
+    .insights-right::-webkit-scrollbar-thumb { background: linear-gradient(180deg,#cfeefd,#a6e4ff); border-radius:8px; }
+    .analytics-list::-webkit-scrollbar { width:8px; }
+    .analytics-list::-webkit-scrollbar-thumb { background:#e6eef7; border-radius:8px; }
+
+    /* responsive tweaks */
+    @media (max-width: 1100px){
+      .insights-container { grid-template-columns: 1fr; }
+      .charts-row { grid-template-columns: 1fr; }
+      .details-card { width:100%; }
+      .trust-card { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar">
+    <div class="logo">PA</div>
+    <h2 class="title">PresenceAI</h2>
+    <select id="classSelector" class="class-selector" aria-label="Filter by class">
+      <option value="all">All Classes</option>
+      <option value="A">Class A</option>
+      <option value="B">Class B</option>
+      <option value="C">Class C</option>
+    </select>
+    <nav class="nav" role="navigation">
+      <button data-page="page-dashboard" class="nav-link active" aria-pressed="true">Dashboard</button>
+      <button data-page="page-presence" class="nav-link" aria-pressed="false">Presence Map</button>
+      <button data-page="page-timeline" class="nav-link" aria-pressed="false">Timeline</button>
+      <button data-page="page-trust" class="nav-link" aria-pressed="false">Trust Score</button>
+      <button data-page="page-insights" class="nav-link">Insights</button>
+    </nav>
+    <div class="legend" aria-hidden="true">
+      <p><span class="dot present"></span> Present</p>
+      <p><span class="dot absent"></span> Absent</p>
+      <p><span class="dot late"></span> Late</p>
+      <p><span class="dot suspicious"></span> Suspicious</p>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main id="mainContent" class="main">
+
+    <!-- Dashboard Page -->
+    <section id="page-dashboard" class="page active" aria-live="polite">
+      <header class="page-header">
+        <h1>Dashboard</h1>
+        <div class="controls">
+          <button id="regenUsers" class="btn-ghost" title="Regenerate sample data">Regenerate</button>
+          <button id="downloadSnapshot" class="btn-ghost" title="Download CSV snapshot">Export CSV</button>
+        </div>
+      </header>
+      <div class="stats">
+        <div class="stat-card">Present <span id="stat-present" class="number">0</span></div>
+        <div class="stat-card">Absent <span id="stat-absent" class="number">0</span></div>
+        <div class="stat-card">Late <span id="stat-late" class="number">0</span></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Quick Presence Preview</h3>
+          <div id="presencePreview" class="presence-grid" style="margin-top:12px;"></div>
+          <button id="openPresence" class="btn-primary">Open Full Map</button>
+        </div>
+        <div class="card">
+          <h3>Leader board</h3>
+          <div id="leaderboard" class="leaderboard"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Presence Map Page -->
+    <section id="page-presence" class="page" aria-hidden="true">
+      <header class="page-header"><h1>Presence Map</h1></header>
+      <div id="presenceMap" class="presence-grid"></div>
+    </section>
+
+    <!-- Timeline Page -->
+    <section id="page-timeline" class="page" aria-hidden="true">
+      <header class="page-header"><h1>Timeline</h1></header>
+      <div id="timeline" class="timeline-grid"></div>
+    </section>
+
+    <!-- Trust Score Page -->
+    <section id="page-trust" class="page" aria-hidden="true">
+      <header class="page-header"><h1>Trust Score</h1></header>
+      <div class="trust-layout">
+        <div class="trust-top">
+          <h3>Top Students</h3>
+          <div id="trustTopGrid" class="top-grid"></div>
+        </div>
+
+        <div class="trust-list">
+          <h3>All Students</h3>
+          <div id="trustLeaderboard" class="leaderboard scrollable"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Insights Page -->
+    <section id="page-insights" class="page" aria-hidden="true">
+      <header class="page-header"><h1>Insights</h1></header>
+
+      <div class="insights-container">
+        <!-- Left: AI Analytics list (scrollable) -->
+        <div class="analytics-list" id="analyticsList">
+          <div class="searchbox">
+            <input id="analyticsSearch" placeholder="Search analytics..." aria-label="Search analytics"/>
+            <div class="analytics-badge live-badge" title="Live">LIVE</div>
+          </div>
+          <!-- analytics items appended here -->
+        </div>
+
+        <!-- Right: detail view (chart + pie + details) -->
+        <div class="insights-right" id="insightsRight">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <h3 id="insightTitle" style="margin:0">Select an analysis</h3>
+              <div id="insightDesc" style="color:var(--muted); font-size:0.95rem; margin-top:6px;">Click an item on the left to view graphs & breakdowns.</div>
+            </div>
+            <div style="text-align:right; color:var(--muted); font-weight:600;">
+              <div style="font-size:0.85rem; margin-bottom:6px;">Class filter:</div>
+              <div id="insightFilterText">All</div>
+            </div>
+          </div>
+
+          <div class="topbar" style="justify-content:space-between;">
+            <div class="controls" style="gap:10px;">
+              <button id="refreshInsight" class="btn-ghost">Refresh</button>
+              <button id="exportInsightCSV" class="btn-ghost">Export CSV</button>
+            </div>
+            <div style="color:var(--muted); font-weight:700;">Snapshot • <span id="insightTime">--</span></div>
+          </div>
+
+          <!-- Charts row: line + pie (pie has legend to right) -->
+          <div class="charts-row" style="margin-top:12px;">
+            <div class="chart-card chart-large">
+              <canvas id="lineChart" role="img" aria-label="Trend line chart"></canvas>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="chart-card chart-small">
+                <canvas id="pieChart" role="img" aria-label="Distribution pie chart"></canvas>
+              </div>
+              <div id="pieLegend" style="margin-top:6px; font-size:0.9rem;"></div>
+            </div>
+          </div>
+
+          <!-- Trust card + tips below charts -->
+          <div style="margin-top:12px;">
+            <div class="trust-card">
+              <div class="trust-big">
+                <div style="font-size:0.95rem;font-weight:800;color:#0f172a">Trust Score</div>
+                <div id="trustNumber" class="trust-number">--</div>
+                <div id="trustPctDesc" class="trust-sub">Average trust across filtered users</div>
+                <div style="margin-top:6px;"><button id="improveScore" class="btn-primary">Improve My Score</button></div>
+              </div>
+              <div>
+                <h4 style="margin:0 0 8px 0;">AI Tips</h4>
+                <div class="tips-list" id="tipsList">
+                  <!-- tips appended here -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="analytics-details" style="margin-top:14px;">
+            <div class="details-card">
+              <h4>Top students (by trust)</h4>
+              <div id="topStudentsList" class="small-list"></div>
+            </div>
+            <div class="details-card">
+              <h4>Quick stats</h4>
+              <div id="quickStats" style="font-size:0.95rem; color:var(--muted);"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /* ---------- Sample data generation ---------- */
+    const NAMES = ["Aarav","Ishaan","Diya","Vivaan","Anaya","Kavya","Rohan","Sneha","Arjun","Riya","Maya","Karthik","Neha","Sahil","Priya","Vikram"];
+    const STATUSES = ["present","absent","late","suspicious"];
+
+    function randomStatus() {
+      return STATUSES[Math.floor(Math.random()*STATUSES.length)];
+    }
+
+    function makeUsers(n=36){
+      return Array.from({length:n}).map((_,i)=>{
+        const name = NAMES[i % NAMES.length] + " " + (100+i);
+        return {
+          id: "U" + (i+1),
+          name,
+          class: ["A","B","C"][i % 3],
+          status: randomStatus(),
+          trust: Math.floor(60 + Math.random()*40), // 60-99
+          avatar: `https://i.pravatar.cc/100?img=${(i%70)+1}`,
+          history: [
+            {t:getRandomTime(), event:"in"},
+            {t:"12:15", event:"break"},
+            {t:"14:55", event:"out"}
+          ]
+        };
+      });
+    }
+    function getRandomTime(){
+      const hh = 8 + Math.floor(Math.random()*3); // 8-10
+      const mm = Math.floor(Math.random()*60);
+      return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    }
+
+    let users = makeUsers();
+    let selectedClass = "all";
+
+    /* ---------- Helpers ---------- */
+    function filterUsers(){
+      return users.filter(u => selectedClass==="all" || u.class===selectedClass);
+    }
+
+    /* ---------- Presence cards & dashboard ---------- */
+    function userCard(u){
+      return `
+      <div class="presence-card" title="${u.name}">
+        <img src="${u.avatar}" alt="${u.name}">
+        <div class="name">${u.name}</div>
+        <div class="text-sm muted">${u.class}</div>
+        <div class="status ${u.status}" style="margin-top:8px">${u.status}</div>
+      </div>`;
+    }
+
+    function renderPresence(containerId){
+      const container = document.getElementById(containerId);
+      container.innerHTML = filterUsers().map(userCard).join("");
+    }
+
+    function renderLeaderboard(id, list){
+      const lb = document.getElementById(id);
+      lb.innerHTML = "";
+      const sorted = [...list].sort((a,b)=>b.trust - a.trust);
+      sorted.slice(0,10).forEach((u,i)=>{
+        lb.innerHTML += `<div><span>${i+1}. ${u.name}</span><span>${u.trust}%</span></div>`;
+      });
+    }
+
+    function animateNumber(el, to){
+      const start = +el.innerText.replace(/\D/g,'') || 0;
+      const diff = to - start;
+      const duration = 550;
+      const startTime = performance.now();
+      function step(now){
+        const t = Math.min(1, (now-startTime)/duration);
+        const val = Math.round(start + diff * easeOutCubic(t));
+        el.innerText = val;
+        if(t < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+      function easeOutCubic(x){ return 1 - Math.pow(1-x, 3); }
+    }
+
+    function renderDashboard(){
+      const data = filterUsers();
+      animateNumber(document.getElementById("stat-present"), data.filter(u=>u.status==="present").length);
+      animateNumber(document.getElementById("stat-absent"), data.filter(u=>u.status==="absent").length);
+      animateNumber(document.getElementById("stat-late"), data.filter(u=>u.status==="late").length);
+
+      document.getElementById("presencePreview").innerHTML = data.slice(0,6).map(userCard).join("");
+      renderLeaderboard("leaderboard", data);
+    }
+
+    /* ---------- Timeline ---------- */
+    function renderTimeline(){
+      const t = document.getElementById("timeline");
+      t.innerHTML = filterUsers().map(u=>`
+        <div class="timeline-entry">
+          <strong>${u.name}</strong> (${u.class}) - ${u.status}<br>
+          ${u.history.map(h=> `<span style="font-weight:700">${h.t}</span> ${h.event}`).join("<br>")}
+        </div>`).join("");
+    }
+
+    /* ---------- Trust Page ---------- */
+    function renderTrustPage(){
+      const data = filterUsers();
+
+      // Top Students
+      const top = [...data].sort((a,b)=>b.trust - a.trust).slice(0,6);
+      const topGrid = document.getElementById("trustTopGrid");
+      topGrid.innerHTML = top.map(u=>`
+        <div class="top-card">
+          <img src="${u.avatar}" alt="${u.name}">
+          <div class="name">${u.name}</div>
+          <div class="class muted">${u.class}</div>
+          <div class="score">${u.trust}%</div>
+        </div>
+      `).join("");
+
+      // Leaderboard (scrollable)
+      const lb = document.getElementById("trustLeaderboard");
+      lb.innerHTML = "";
+      [...data].sort((a,b)=>b.trust - a.trust).forEach((u,i)=>{
+        lb.innerHTML += `<div><span>${i+1}. ${u.name} (${u.class})</span><span>${u.trust}%</span></div>`;
+      });
+    }
+
+    /* ---------- Insights: analytics definitions ---------- */
+    const ANALYTICS = [
+      {
+        id: 'late_month',
+        title: 'Late — This Month',
+        description: 'Percentage of students marked late (snapshot)',
+        compute: (usersFiltered) => {
+          const total = usersFiltered.length || 1;
+          const late = usersFiltered.filter(u=>u.status==='late').length;
+          const perc = Math.round((late/total)*100);
+          const trend = makeTrend(perc,7);
+          return {
+            pie: [late, total-late],
+            pieLabels: ['Late','On time'],
+            trend,
+            trendLabels: makeLastDays(7),
+            detailsTitle: `${perc}% students late`,
+            topStudents: topByTrust(usersFiltered,5)
+          };
+        }
+      },
+      {
+        id: 'punctuality_A',
+        title: 'Punctuality — Class A',
+        description: 'Punctuality issues for class A (present but not punctual)',
+        compute: (usersFiltered) => {
+          const onlyA = usersFiltered.filter(u=>u.class==='A');
+          const total = onlyA.length || 1;
+          const notPunctual = onlyA.filter(u=>u.trust < 75).length;
+          const perc = Math.round((notPunctual/total)*100);
+          return {
+            pie: [notPunctual, total-notPunctual],
+            pieLabels: ['Not punctual','Punctual'],
+            trend: makeTrend(perc,7),
+            trendLabels: makeLastDays(7),
+            detailsTitle: (total===0)?'No students in Class A': `${perc}% not punctual in Class A`,
+            topStudents: topByTrust(onlyA,5)
+          };
+        }
+      },
+      {
+        id: 'consistent_C',
+        title: 'Consistent — Class C',
+        description: 'Students with high consistency (trust ≥ 85) in Class C',
+        compute: (usersFiltered) => {
+          const onlyC = usersFiltered.filter(u=>u.class==='C');
+          const total = onlyC.length || 1;
+          const consistent = onlyC.filter(u=>u.trust >= 85).length;
+          const perc = Math.round((consistent/total)*100);
+          return {
+            pie: [consistent, total-consistent],
+            pieLabels: ['Consistent','Not consistent'],
+            trend: makeTrend(perc,7),
+            trendLabels: makeLastDays(7),
+            detailsTitle: (total===0)?'No students in Class C' : `${perc}% consistent in Class C`,
+            topStudents: topByTrust(onlyC,5)
+          };
+        }
+      },
+      {
+        id: 'suspicious_count',
+        title: 'Suspicious activity',
+        description: 'Number of flagged suspicious statuses',
+        compute: (usersFiltered) => {
+          const total = usersFiltered.length || 1;
+          const suspicious = usersFiltered.filter(u=>u.status==='suspicious').length;
+          const perc = Math.round((suspicious/total)*100);
+          return {
+            pie: [suspicious, total-suspicious],
+            pieLabels: ['Suspicious','Normal'],
+            trend: makeTrend(perc,7),
+            trendLabels: makeLastDays(7),
+            detailsTitle: `${suspicious} flagged suspicious`,
+            topStudents: topByTrust(usersFiltered,5)
+          };
+        }
+      },
+      {
+        id: 'avg_trust',
+        title: 'Average Trust',
+        description: 'Average trust across the filtered population',
+        compute: (usersFiltered) => {
+          const total = usersFiltered.length || 1;
+          const avg = Math.round(usersFiltered.reduce((a,b)=>a+b.trust,0)/total);
+          const low = usersFiltered.filter(u=>u.trust < 70).length;
+          return {
+            pie: [avg, 100-avg],
+            pieLabels: ['Avg trust','Remaining to 100'],
+            trend: makeTrend(avg,7),
+            trendLabels: makeLastDays(7),
+            detailsTitle: `Average trust ${avg}%`,
+            topStudents: topByTrust(usersFiltered,5)
+          };
+        }
+      },
+      {
+        id: 'attendance_rate',
+        title: 'Attendance Rate',
+        description: 'Estimated present vs absent snapshot',
+        compute: (usersFiltered) => {
+          const total = usersFiltered.length || 1;
+          const present = usersFiltered.filter(u=>u.status==='present').length;
+          const perc = Math.round((present/total)*100);
+          return {
+            pie: [present, total-present],
+            pieLabels: ['Present','Absent'],
+            trend: makeTrend(perc,7),
+            trendLabels: makeLastDays(7),
+            detailsTitle: `${perc}% present`,
+            topStudents: topByTrust(usersFiltered,5)
+          };
+        }
+      }
+    ];
+
+    /* ---------- Analytics helpers ---------- */
+    function makeLastDays(n){
+      const labels = [];
+      for(let i=n-1;i>=0;i--){
+        if(i===0) labels.push('Today'); else labels.push(`D-${i}`);
+      }
+      return labels;
+    }
+    function makeTrend(base, points=7){
+      const arr=[];
+      for(let i=0;i<points;i++){
+        const jitter = Math.round((Math.random()*12)-6);
+        let v = Math.max(0, Math.min(100, base + jitter));
+        arr.push(v);
+      }
+      return arr;
+    }
+    function topByTrust(list, n=5){
+      return [...list].sort((a,b)=>b.trust-a.trust).slice(0,n);
+    }
+
+    /* ---------- Chart drawing utilities (canvas) ---------- */
+
+    function setCanvasForRetina(canvas){
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      // if rect has zero width/height (hidden), fallback to offset size
+      const width = rect.width || canvas.offsetWidth || 300;
+      const height = rect.height || canvas.offsetHeight || 200;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      return {ctx, w:width, h:height};
+    }
+
+    function clearCanvas(canvas){
+      const {ctx, w, h} = setCanvasForRetina(canvas);
+      ctx.clearRect(0,0,w,h);
+      return {ctx, w, h};
+    }
+
+    function drawLineChart(canvas, labels, values){
+      const {ctx, w, h} = clearCanvas(canvas);
+      if(!values || values.length===0){
+        ctx.fillStyle = "#64748b";
+        ctx.font = "14px Inter, Arial";
+        ctx.fillText("No data", w/2 - 18, h/2);
+        return;
+      }
+
+      const padding = {left:42, right:18, top:28, bottom:44};
+      const chartW = w - padding.left - padding.right;
+      const chartH = h - padding.top - padding.bottom;
+
+      // axes & grid
+      ctx.strokeStyle = "#eef4fb";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for(let i=0;i<5;i++){
+        const y = padding.top + (chartH/4)*i;
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(w - padding.right, y);
+      }
+      ctx.stroke();
+
+      // compute scale
+      const max = Math.max(...values, 10);
+      const min = 0;
+      const vRange = max - min || 1;
+
+      // draw line
+      ctx.lineWidth = 2.8;
+      const grad = ctx.createLinearGradient(0, 0, w, 0);
+      grad.addColorStop(0, "rgba(0,255,185,0.95)");
+      grad.addColorStop(1, "rgba(0,140,255,0.98)");
+      ctx.strokeStyle = grad;
+      ctx.beginPath();
+      values.forEach((val, idx)=>{
+        const x = padding.left + (chartW/(values.length-1 || 1)) * idx;
+        const y = padding.top + chartH - ((val - min) / vRange) * chartH;
+        if(idx===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+
+      // fill under line (soft)
+      ctx.lineTo(padding.left + chartW, padding.top + chartH);
+      ctx.lineTo(padding.left, padding.top + chartH);
+      ctx.closePath();
+      const fillGrad = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartH);
+      fillGrad.addColorStop(0, "rgba(0,140,255,0.12)");
+      fillGrad.addColorStop(1, "rgba(0,255,185,0.02)");
+      ctx.fillStyle = fillGrad;
+      ctx.fill();
+
+      // draw points & labels
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = "#0ea5e9";
+      ctx.lineWidth = 1.6;
+      ctx.font = "12px Inter, Arial";
+      ctx.fillStyle = "#0f172a";
+      values.forEach((val, idx)=>{
+        const x = padding.left + (chartW/(values.length-1 || 1)) * idx;
+        const y = padding.top + chartH - ((val - min) / vRange) * chartH;
+        ctx.beginPath();
+        ctx.arc(x,y,4,0,Math.PI*2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+        ctx.strokeStyle = "#0ea5e9";
+        ctx.stroke();
+
+        // small value label
+        ctx.fillStyle = "#0f172a";
+        ctx.fillText(val + "%", x - 14, y - 12);
+      });
+
+      // x-axis labels
+      ctx.fillStyle = "#475569";
+      ctx.font = "12px Inter, Arial";
+      labels.forEach((lab, idx)=>{
+        const x = padding.left + (chartW/(labels.length-1 || 1)) * idx;
+        ctx.fillText(lab, x - 14, padding.top + chartH + 22);
+      });
+
+      // title left
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "600 13px Inter, Arial";
+      ctx.fillText("Trend", 8, 18);
+    }
+
+    function drawPieChart(canvas, values, labels){
+      const {ctx, w, h} = clearCanvas(canvas);
+
+      const cx = w/2;
+      const cy = h/2;
+      const radius = Math.min(w, h)/2 - 16;
+      const total = values.reduce((a,b)=>a+b,0) || 1;
+      const colors = ["#ef4444","#16a34a","#f59e0b","#8b5cf6","#0ea5e9","#e11d48"];
+
+      let start = -Math.PI/2;
+      for(let i=0;i<values.length;i++){
+        const slice = values[i] / total;
+        const end = start + slice * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.arc(cx,cy,radius,start,end);
+        ctx.closePath();
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+        // small separation line
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        start = end;
+      }
+
+      // center text
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "700 14px Inter, Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("Distribution", cx, cy - 6);
+
+      // subtitle showing totals (first slice)
+      ctx.font = "600 12px Inter, Arial";
+      ctx.fillText(`${values[0] || 0}`, cx, cy + 18);
+    }
+
+    /* ---------- Insights rendering ---------- */
+    let selectedAnalyticsId = null;
+
+    function renderAnalyticsList(filterText = ''){
+      const box = document.getElementById("analyticsList");
+      // keep the search box; remove other children then rebuild items
+      const searchHtml = box.querySelector('.searchbox').outerHTML;
+      box.innerHTML = searchHtml;
+
+      const listContainer = box;
+      ANALYTICS.forEach(a=>{
+        if(filterText && !(`${a.title} ${a.description}`.toLowerCase().includes(filterText.toLowerCase()))) return;
+        const el = document.createElement('div');
+        el.className = "analytics-item";
+        el.dataset.id = a.id;
+        el.innerHTML = `
+          <div class="meta">
+            <div class="analytics-title">${a.title}</div>
+            <div class="analytics-desc">${a.description}</div>
+          </div>
+          <div class="analytics-badge">View</div>
+        `;
+        listContainer.appendChild(el);
+      });
+
+      // click handlers
+      box.querySelectorAll('.analytics-item').forEach(item=>{
+        item.addEventListener('click', ()=>{
+          const id = item.dataset.id;
+          document.querySelectorAll('.analytics-item').forEach(i=>i.classList.remove('selected'));
+          item.classList.add('selected');
+          selectedAnalyticsId = id;
+          showAnalyticsDetail(id);
+        });
+      });
+
+      // select first by default (if nothing selected)
+      if(!selectedAnalyticsId){
+        const first = box.querySelector('.analytics-item');
+        if(first) { first.classList.add('selected'); selectedAnalyticsId = first.dataset.id; showAnalyticsDetail(selectedAnalyticsId); }
+      } else {
+        // re-select current if still present
+        const current = box.querySelector(`.analytics-item[data-id="${selectedAnalyticsId}"]`);
+        if(current){
+          document.querySelectorAll('.analytics-item').forEach(i=>i.classList.remove('selected'));
+          current.classList.add('selected');
+        }
+      }
+
+      // wire search
+      const search = document.getElementById('analyticsSearch');
+      if(search){
+        search.oninput = (e) => {
+          renderAnalyticsList(e.target.value);
+        };
+      }
+    }
+
+    function showAnalyticsDetail(id){
+      const analytic = ANALYTICS.find(a=>a.id===id);
+      if(!analytic) return;
+      const filtered = filterUsers();
+      const data = analytic.compute(filtered);
+
+      // header & filter display
+      document.getElementById('insightTitle').innerText = analytic.title;
+      document.getElementById('insightDesc').innerText = analytic.description;
+      document.getElementById('insightFilterText').innerText = (selectedClass==="all"?"All":selectedClass);
+      document.getElementById('insightTime').innerText = new Date().toLocaleString();
+
+      // draw charts
+      const lineCanvas = document.getElementById('lineChart');
+      drawLineChart(lineCanvas, data.trendLabels, data.trend);
+
+      const pieCanvas = document.getElementById('pieChart');
+      drawPieChart(pieCanvas, data.pie, data.pieLabels);
+
+      // pie legend
+      const legend = document.getElementById('pieLegend');
+      legend.innerHTML = data.pieLabels.map((lab,i)=>{
+        const colors = ["#ef4444","#16a34a","#f59e0b","#8b5cf6","#0ea5e9","#e11d48"];
+        return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <div style="width:12px;height:12px;border-radius:3px;background:${colors[i%colors.length]};"></div>
+          <div style="flex:1">${lab}</div>
+          <div style="font-weight:700">${data.pie[i]}</div>
+        </div>`;
+      }).join("");
+
+      // top students
+      const topDiv = document.getElementById('topStudentsList');
+      if(data.topStudents && data.topStudents.length){
+        topDiv.innerHTML = data.topStudents.map((s, idx)=>`<div><span>${idx+1}. ${s.name}</span><span>${s.trust}%</span></div>`).join("");
+      } else {
+        topDiv.innerHTML = `<div style="color:var(--muted)">No students to show</div>`;
+      }
+
+      // quick stats
+      document.getElementById('quickStats').innerHTML = `<div style="color:var(--muted)">${data.detailsTitle || ''}</div>`;
+
+      // Trust score & tips (compute from filtered)
+      const avgTrust = Math.round(filtered.reduce((a,b)=>a+b.trust,0) / (filtered.length || 1));
+      document.getElementById('trustNumber').innerText = avgTrust + '%';
+      document.getElementById('trustPctDesc').innerText = `Average trust across ${filtered.length} users`;
+
+      // dynamic tips (simple heuristics)
+      const tips = [];
+      if(avgTrust < 70) tips.push('Focus on verification — run spot checks for identities.');
+      else tips.push('Trust level is good — maintain verification cadence.');
+
+      // add another tips based on suspicious counts
+      const suspicious = filtered.filter(u=>u.status==='suspicious').length;
+      if(suspicious > 0) tips.push(`Investigate ${suspicious} suspicious flag(s) — review footage or logs.`);
+      else tips.push('No suspicious flags — continue monitoring.');
+
+      // generic improvement
+      tips.push('Enable two-factor checks & regular audit to raise trust.');
+
+      const tipsList = document.getElementById('tipsList');
+      tipsList.innerHTML = tips.map(t=>`<div class="tip">${t}</div>`).join("");
+
+      // refresh Trust Score card shading (subtle)
+      // (We could animate this; keep simple)
+    }
+
+    /* ---------- Navigation and event wiring ---------- */
+    function showPage(id){
+      document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+      const pageEl = document.getElementById(id);
+      if(pageEl) pageEl.classList.add("active");
+
+      document.querySelectorAll(".nav-link").forEach(btn=>{
+        btn.classList.remove("active");
+        btn.setAttribute("aria-pressed","false");
+      });
+      const btn = document.querySelector(`.nav-link[data-page="${id}"]`);
+      if(btn) { btn.classList.add("active"); btn.setAttribute("aria-pressed","true"); }
+
+      // render appropriate page
+      if(id==="page-dashboard") renderDashboard();
+      if(id==="page-presence") renderPresence("presenceMap");
+      if(id==="page-timeline") renderTimeline();
+      if(id==="page-insights") {
+        renderAnalyticsList();
+        if(selectedAnalyticsId) showAnalyticsDetail(selectedAnalyticsId);
+      }
+      if(id==="page-trust") renderTrustPage();
+
+      // on any navigation, ensure insights-right canvases are redrawn if visible
+      setTimeout(()=>{ if(id==='page-insights' && selectedAnalyticsId) showAnalyticsDetail(selectedAnalyticsId); }, 60);
+    }
+
+    document.querySelectorAll(".nav-link").forEach(btn=>{
+      btn.addEventListener("click", ()=>showPage(btn.dataset.page));
+    });
+
+    document.getElementById("openPresence").addEventListener("click", ()=>showPage("page-presence"));
+
+    // class selector must refresh the currently visible page (so insights respects filter)
+    document.getElementById("classSelector").addEventListener("change", (e)=>{
+      selectedClass = e.target.value;
+      const active = document.querySelector('.page.active');
+      if(!active) { renderDashboard(); return; }
+      const id = active.id;
+      if(id==="page-dashboard") renderDashboard();
+      else if(id==="page-presence") renderPresence("presenceMap");
+      else if(id==="page-timeline") renderTimeline();
+      else if(id==="page-trust") renderTrustPage();
+      else if(id==="page-insights") {
+        renderAnalyticsList();
+        if(selectedAnalyticsId) showAnalyticsDetail(selectedAnalyticsId);
+      }
+    });
+
+    /* ---------- Utility: CSV export ---------- */
+    function exportCSV(rows, filename='snapshot.csv'){
+      if(!rows || !rows.length) return;
+      const keys = Object.keys(rows[0]);
+      const csv = [keys.join(',')].concat(rows.map(r => keys.map(k => `"${String(r[k]).replace(/"/g,'""')}"`).join(','))).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('downloadSnapshot').addEventListener('click', ()=>{
+      const rows = users.map(u=>({ id:u.id, name:u.name, class:u.class, status:u.status, trust:u.trust }));
+      exportCSV(rows, `presence_snapshot_${Date.now()}.csv`);
+    });
+
+    document.getElementById('exportInsightCSV').addEventListener('click', ()=>{
+      const filtered = filterUsers();
+      const rows = filtered.map(u=>({ id:u.id, name:u.name, class:u.class, status:u.status, trust:u.trust }));
+      exportCSV(rows, `insight_export_${Date.now()}.csv`);
+    });
+
+    document.getElementById('regenUsers').addEventListener('click', ()=>{
+      users = makeUsers(users.length);
+      // re-render current page
+      const active = document.querySelector('.page.active');
+      if(active) { showPage(active.id); }
+    });
+
+    document.getElementById('refreshInsight').addEventListener('click', ()=>{
+      // small refresh animation then recompute
+      const t = document.getElementById('insightTime');
+      t.innerText = 'Refreshing...';
+      setTimeout(()=> {
+        showAnalyticsDetail(selectedAnalyticsId);
+      }, 400);
+    });
+
+    document.getElementById('improveScore').addEventListener('click', ()=>{
+      alert("Tip: run verification & audits to improve trust score. (Demo action)");
+    });
+
+    /* ---------- Analytics search wiring (delegated) ---------- */
+    document.addEventListener('input', (e)=>{
+      if(e.target && e.target.id === 'analyticsSearch'){
+        renderAnalyticsList(e.target.value);
+      }
+    });
+
+    /* ---------- Init ---------- */
+    // initial render of default page
+    renderDashboard();
+
+    // initial analytics list ready
+    setTimeout(()=> renderAnalyticsList(), 40);
+
+    // Ensure charts update on resize for crispness
+    window.addEventListener('resize', ()=>{
+      const active = document.querySelector('.page.active');
+      if(active && active.id === 'page-insights') {
+        if(selectedAnalyticsId) showAnalyticsDetail(selectedAnalyticsId);
+      }
+    });
+
+  </script>
+</body>
+</html>
