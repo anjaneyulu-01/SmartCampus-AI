@@ -15,6 +15,82 @@ const upload = multer({
 });
 
 /**
+ * GET /api/attendance/stats - Get dashboard statistics
+ */
+router.get('/stats', requireAuth, async (req, res) => {
+  try {
+    const [{ total_students }] = await dbAll('SELECT COUNT(*) AS total_students FROM students');
+
+    const [{ present_today }] = await dbAll(`
+      SELECT COUNT(DISTINCT student_id) AS present_today
+      FROM attendance_events
+      WHERE student_id IS NOT NULL
+        AND DATE(ts) = CURDATE()
+        AND type IN ('checkin', 'present')
+    `);
+
+    const [{ suspicious_count }] = await dbAll(`
+      SELECT COUNT(*) AS suspicious_count
+      FROM attendance_events
+      WHERE DATE(ts) = CURDATE()
+        AND type = 'suspicious'
+    `);
+
+    const total = Number(total_students || 0);
+    const present = Number(present_today || 0);
+    const absent = Math.max(total - present, 0);
+    const attendance_rate = total > 0 ? Math.round((present / total) * 1000) / 10 : 0;
+
+    // No explicit timetable in DB; keep as a proxy metric for now.
+    const avg_punctuality = attendance_rate;
+
+    res.json({
+      total_students: total,
+      present_today: present,
+      absent_today: absent,
+      attendance_rate,
+      avg_punctuality,
+      suspicious_count: Number(suspicious_count || 0),
+    });
+  } catch (error) {
+    console.error('[ERROR] Attendance stats:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+/**
+ * GET /api/attendance/summary?days=7 - Attendance trend (distinct present per day)
+ */
+router.get('/summary', requireAuth, async (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 7, 1), 60);
+    const rows = await dbAll(
+      `
+        SELECT DATE(ts) AS date,
+               COUNT(DISTINCT student_id) AS count
+        FROM attendance_events
+        WHERE student_id IS NOT NULL
+          AND ts >= DATE_SUB(NOW(), INTERVAL ? DAY)
+          AND type IN ('checkin','present')
+        GROUP BY DATE(ts)
+        ORDER BY DATE(ts) ASC
+      `,
+      [days]
+    );
+
+    res.json(
+      (rows || []).map((r) => ({
+        date: r.date,
+        count: Number(r.count || 0),
+      }))
+    );
+  } catch (error) {
+    console.error('[ERROR] Attendance summary:', error);
+    res.status(500).json({ error: 'Failed to fetch summary' });
+  }
+});
+
+/**
  * POST /api/attendance/mark - Manually mark attendance
  */
 router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res) => {
@@ -29,8 +105,8 @@ router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res
     const label = `Marked: ${status || 'Present'}`;
     
     await dbRun(
-      'INSERT INTO attendance_events (student_id, type, label) VALUES (?, ?, ?)',
-      [student_id, eventType, label]
+      'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
+      [student_id, student_id, 'student', eventType, label]
     );
     
     if (status?.toLowerCase() === 'suspicious') {
@@ -66,7 +142,8 @@ router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res
  */
 router.get('/', async (req, res) => {
   try {
-    const { date, class: class_name } = req.query;
+    const { date } = req.query;
+    const class_name = req.query.class || req.query.class_id || req.query.class_name;
     
     // Normalize date (default to today)
     let qdate = date;
@@ -189,8 +266,8 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
     try {
       if (is_suspicious) {
         await dbRun(
-          'INSERT INTO attendance_events (student_id, type, label) VALUES (?, ?, ?)',
-          [student_id, 'suspicious', 'Suspicious checkin']
+          'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
+          [student_id, student_id, 'student', 'suspicious', 'Suspicious checkin']
         );
         await dbRun(
           'UPDATE trust_scores SET score = GREATEST(score - 8, 0), updated_at = NOW() WHERE student_id = ?',
@@ -198,12 +275,12 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
         );
       } else {
         await dbRun(
-          'INSERT INTO attendance_events (student_id, type, label) VALUES (?, ?, ?)',
-          [student_id, 'checkin', 'Camera checkin']
+          'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
+          [student_id, student_id, 'student', 'checkin', 'Camera checkin']
         );
         await dbRun(
-          'INSERT INTO attendance_events (student_id, type, label) VALUES (?, ?, ?)',
-          [student_id, 'present', 'Auto-marked present via face scan']
+          'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
+          [student_id, student_id, 'student', 'present', 'Auto-marked present via face scan']
         );
         await dbRun(
           'UPDATE trust_scores SET score = LEAST(score + 1, 100), streak = streak + 1, punctuality = LEAST(punctuality + 1, 100), updated_at = NOW() WHERE student_id = ?',
@@ -255,8 +332,8 @@ router.post('/simulate-checkin', async (req, res) => {
     
     const eventType = status?.toLowerCase() === 'suspicious' ? 'suspicious' : 'checkin';
     await dbRun(
-      'INSERT INTO attendance_events (student_id, type, label) VALUES (?, ?, ?)',
-      [student_id, eventType, `Simulated ${status || 'Present'}`]
+      'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
+      [student_id, student_id, 'student', eventType, `Simulated ${status || 'Present'}`]
     );
     
     if (status?.toLowerCase() === 'suspicious') {

@@ -9,6 +9,9 @@ import studentRoutes from './src/routes/students.js';
 import attendanceRoutes from './src/routes/attendance.js';
 import trustRoutes from './src/routes/trust.js';
 import insightRoutes from './src/routes/insights.js';
+import departmentRoutes from './src/routes/departments.js';
+import facultyRoutes from './src/routes/faculty.js';
+import workerRoutes from './src/routes/workers.js';
 import { setupWebSocket } from './src/websocket/websocket.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,6 +51,9 @@ app.get('/api/healthz', (req, res) => {
 
 // Routes
 app.use('/api', authRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/faculty', facultyRoutes);
+app.use('/api/workers', workerRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api', attendanceRoutes); // Also mount for /api/checkin, /api/simulate-checkin, /api/timeline

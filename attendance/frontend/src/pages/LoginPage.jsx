@@ -17,7 +17,8 @@ export default function LoginPage() {
     const success = await login(username, password)
     if (success) {
       toast.success('Welcome back!')
-      navigate('/')
+      // Small delay to ensure user state is loaded
+      setTimeout(() => navigate('/'), 100)
     }
   }
 

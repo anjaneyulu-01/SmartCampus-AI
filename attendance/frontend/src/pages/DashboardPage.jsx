@@ -151,10 +151,10 @@ export default function DashboardPage() {
               onChange={(e) => setSelectedClass(e.target.value)}
               className="input-field max-w-xs"
             >
-              <option value="all">All Classes</option>
-              <option value="10a">Class 10-A</option>
-              <option value="10b">Class 10-B</option>
-              <option value="11a">Class 11-A</option>
+              <option className="bg-slate-900 text-white" value="all">All Classes</option>
+              <option className="bg-slate-900 text-white" value="10a">Class 10-A</option>
+              <option className="bg-slate-900 text-white" value="10b">Class 10-B</option>
+              <option className="bg-slate-900 text-white" value="11a">Class 11-A</option>
             </select>
           </div>
           <AttendanceTable />

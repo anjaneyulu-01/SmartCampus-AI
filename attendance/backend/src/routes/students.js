@@ -30,8 +30,12 @@ const storage = multer.diskStorage({
     } else {
       cb(null, AVATARS_DIR);
     }
-  },
+    router.get('/', requireAuth, async (req, res) => {
   filename: (req, file, cb) => {
+        const classFilter = req.query.class || req.query.class_id || req.query.class_name;
+        const whereClause = classFilter && String(classFilter).toLowerCase() !== 'all' ? 'WHERE s.class = ?' : '';
+        const params = whereClause ? [classFilter] : [];
+
     const studentId = req.body.student_id || 'unknown';
     const ext = path.extname(file.originalname) || '.jpg';
     cb(null, `${studentId}${ext}`);
@@ -52,6 +56,7 @@ function calculateAttendancePercentage(studentId) {
       SELECT COUNT(DISTINCT DATE(ts)) as present_days
       FROM attendance_events
       WHERE student_id = ?
+          ${whereClause}
       AND type = 'checkin'
       AND ts >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     `, [studentId])
@@ -126,7 +131,7 @@ router.get('/', async (req, res) => {
 /**
  * GET /api/students/:student_id - Get student by ID
  */
-router.get('/:student_id', async (req, res) => {
+router.get('/:student_id', requireAuth, async (req, res) => {
   try {
     const { student_id } = req.params;
     const student = await dbGet(`

@@ -2,8 +2,10 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores'
 import {
   LayoutDashboard,
-  Scan,
   Users,
+  GraduationCap,
+  Briefcase,
+  BookOpenText,
   BarChart3,
   LogOut,
   Menu,
@@ -14,8 +16,10 @@ import { cn } from '../utils'
 
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Scanner', icon: Scan, path: '/scanner' },
   { label: 'Students', icon: Users, path: '/students' },
+  { label: 'Faculty', icon: GraduationCap, path: '/faculty' },
+  { label: 'Workers', icon: Briefcase, path: '/workers' },
+  { label: 'Library', icon: BookOpenText, path: '/library' },
   { label: 'Insights', icon: BarChart3, path: '/insights' },
 ]
 

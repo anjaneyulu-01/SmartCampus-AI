@@ -29,8 +29,9 @@ export const useAuthStore = create((set) => ({
     try {
       const response = await axiosInstance.post('/login', { username, password })
       const { token, ...userInfo } = response.data
+      const normalizedRole = (userInfo.role || '').toString().trim().toLowerCase()
       localStorage.setItem('token', token)
-      set({ user: userInfo, token, loading: false })
+      set({ user: { ...userInfo, role: normalizedRole }, token, loading: false })
       return true
     } catch (err) {
       set({ error: err.response?.data?.error || 'Login failed', loading: false })
@@ -46,7 +47,8 @@ export const useAuthStore = create((set) => ({
   fetchUser: async () => {
     try {
       const response = await axiosInstance.get('/me')
-      set({ user: response.data })
+      const normalizedRole = (response.data?.role || '').toString().trim().toLowerCase()
+      set({ user: { ...response.data, role: normalizedRole } })
     } catch (err) {
       set({ user: null, token: null })
       localStorage.removeItem('token')

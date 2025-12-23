@@ -8,6 +8,7 @@ const router = express.Router();
 
 /**
  * POST /api/login
+ * Supports all roles: admin, hod, teacher, faculty, worker, student
  */
 router.post('/login', async (req, res) => {
   try {
@@ -18,7 +19,12 @@ router.post('/login', async (req, res) => {
     }
     
     const user = await dbGet(
-      'SELECT username, password_hash, salt, role, display_name, student_id, assigned_classes FROM users WHERE username = ?',
+      `SELECT u.username, u.password_hash, u.salt, u.role, u.display_name,
+              u.student_id, u.assigned_classes, u.department_id,
+              d.name as department_name, u.is_active
+       FROM users u
+       LEFT JOIN departments d ON u.department_id = d.id
+       WHERE u.username = ?`,
       [username]
     );
     
@@ -32,12 +38,20 @@ router.post('/login', async (req, res) => {
     
     const token = createToken(username);
     
+    if (user.is_active === false) {
+      return res.status(403).json({ error: 'Account inactive' });
+    }
+    
     res.json({
       token,
       role: user.role,
       display_name: user.display_name,
       student_id: user.student_id,
-      assigned_classes: user.assigned_classes
+      assigned_classes: user.assigned_classes,
+      department_id: user.department_id || null,
+      department_name: user.department_name || null,
+      entity_type: null,
+      entity_id: null
     });
   } catch (error) {
     console.error('[ERROR] Login:', error);
@@ -47,15 +61,34 @@ router.post('/login', async (req, res) => {
 
 /**
  * GET /api/me
+ * Returns current authenticated user info
  */
 router.get('/me', requireAuth, async (req, res) => {
-  res.json({
-    username: req.user.username,
-    role: req.user.role,
-    display_name: req.user.display_name,
-    student_id: req.user.student_id,
-    assigned_classes: req.user.assigned_classes
-  });
+  try {
+    const userFull = await dbGet(
+      `SELECT u.username, u.role, u.display_name, u.student_id, u.assigned_classes,
+              u.department_id, d.name as department_name
+       FROM users u
+       LEFT JOIN departments d ON u.department_id = d.id
+       WHERE u.username = ?`,
+      [req.user.username]
+    );
+    
+    res.json({
+      username: req.user.username,
+      role: req.user.role,
+      display_name: req.user.display_name,
+      student_id: req.user.student_id,
+      assigned_classes: req.user.assigned_classes,
+      department_id: userFull?.department_id || null,
+      department_name: userFull?.department_name || null,
+      entity_type: null,
+      entity_id: null
+    });
+  } catch (error) {
+    console.error('[ERROR] Get profile:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
 });
 
 export default router;

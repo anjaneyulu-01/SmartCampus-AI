@@ -128,10 +128,10 @@ export default function StudentsPage() {
             onChange={(e) => setSelectedClass(e.target.value)}
             className="input-field max-w-xs"
           >
-            <option value="10a">Class 10-A</option>
-            <option value="10b">Class 10-B</option>
-            <option value="11a">Class 11-A</option>
-            <option value="11b">Class 11-B</option>
+            <option className="bg-slate-900 text-white" value="10a">Class 10-A</option>
+            <option className="bg-slate-900 text-white" value="10b">Class 10-B</option>
+            <option className="bg-slate-900 text-white" value="11a">Class 11-A</option>
+            <option className="bg-slate-900 text-white" value="11b">Class 11-B</option>
           </select>
         </div>
       </motion.div>

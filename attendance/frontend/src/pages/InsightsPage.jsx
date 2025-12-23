@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   BarChart3,
@@ -7,6 +7,7 @@ import {
   Download,
   Filter,
 } from 'lucide-react'
+import { axiosApi } from '../stores'
 import {
   BarChart,
   Bar,
@@ -40,6 +41,40 @@ const COLORS = ['#22c55e', '#ef4444', '#f59e0b', '#3b82f6']
 
 export default function InsightsPage() {
   const [dateRange, setDateRange] = useState('week')
+  const [target, setTarget] = useState('students')
+  const [insights, setInsights] = useState([])
+  const [loadingInsights, setLoadingInsights] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    const run = async () => {
+      try {
+        setLoadingInsights(true)
+        const res = await axiosApi.get('/insights')
+        if (mounted) setInsights(Array.isArray(res.data) ? res.data : [])
+      } catch {
+        if (mounted) setInsights([])
+      } finally {
+        if (mounted) setLoadingInsights(false)
+      }
+    }
+    run()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const filteredInsights = useMemo(() => {
+    const items = insights
+    if (!items.length) return []
+
+    const q = target === 'teachers' ? 'faculty' : target
+    return items.filter((i) => {
+      const kind = (i.kind || '').toString().toLowerCase()
+      const text = (i.text || '').toString().toLowerCase()
+      return kind.includes(q) || text.includes(q)
+    })
+  }, [insights, target])
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -70,13 +105,23 @@ export default function InsightsPage() {
           </div>
           <div className="flex gap-3">
             <select
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              className="input-field max-w-xs"
+            >
+              {/* Options render in the native dropdown menu; force dark text for readability */}
+              <option className="text-slate-900" value="students">Students</option>
+              <option className="text-slate-900" value="teachers">Teachers</option>
+              <option className="text-slate-900" value="workers">Workers</option>
+            </select>
+            <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
               className="input-field max-w-xs"
             >
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-              <option value="semester">This Semester</option>
+              <option className="text-slate-900" value="week">This Week</option>
+              <option className="text-slate-900" value="month">This Month</option>
+              <option className="text-slate-900" value="semester">This Semester</option>
             </select>
             <button className="btn-primary flex items-center gap-2">
               <Download size={18} />
@@ -84,6 +129,33 @@ export default function InsightsPage() {
             </button>
           </div>
         </div>
+      </motion.div>
+
+      {/* Insights List */}
+      <motion.div variants={itemVariants} className="card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-white">
+            {target === 'students' ? 'Student' : target === 'teachers' ? 'Teacher' : 'Worker'} Insights
+          </h2>
+        </div>
+
+        {loadingInsights ? (
+          <div className="text-gray-300">Loading insights...</div>
+        ) : filteredInsights.length > 0 ? (
+          <div className="space-y-3">
+            {filteredInsights.map((i) => (
+              <div key={i.id} className="bg-glass rounded-lg p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-white font-medium">{i.kind || 'Insight'}</p>
+                  <span className="text-xs text-gray-400">{i.createdAt ? new Date(i.createdAt).toLocaleString() : ''}</span>
+                </div>
+                <p className="text-gray-300 text-sm mt-2">{i.text}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-gray-400">No insights found for this selection.</div>
+        )}
       </motion.div>
 
       {/* KPI Cards */}
