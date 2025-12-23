@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Camera, Loader, CheckCircle, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { axiosApi } from '../stores'
 
 export default function ScannerPage() {
   const videoRef = useRef(null)
@@ -43,30 +44,75 @@ export default function ScannerPage() {
     setLoading(true)
     try {
       const context = canvasRef.current.getContext('2d')
-      context.drawImage(
-        videoRef.current,
-        0,
-        0,
-        canvasRef.current.width,
-        canvasRef.current.height,
-      )
-
-      // Simulate face recognition
-      setTimeout(() => {
-        setDetectedPerson({
-          name: 'John Doe',
-          student_id: 'STU001',
-          confidence: 0.95,
-          timestamp: new Date().toLocaleTimeString(),
+      const captureBlob = () =>
+        new Promise((resolve) => {
+          context.drawImage(
+            videoRef.current,
+            0,
+            0,
+            canvasRef.current.width,
+            canvasRef.current.height,
+          )
+          canvasRef.current.toBlob(
+            (blob) => resolve(blob),
+            'image/jpeg',
+            0.9,
+          )
         })
-        toast.success('Face recognized successfully!')
+
+      // Backend expects multiple frames for consensus
+      const blobs = []
+      for (let i = 0; i < 3; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const blob = await captureBlob()
+        if (blob) blobs.push(blob)
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 150))
+      }
+
+      if (blobs.length === 0) {
+        toast.error('Failed to capture frames')
         setLoading(false)
-      }, 2000)
+        return
+      }
+
+      const fd = new FormData()
+      blobs.forEach((b, idx) => {
+        fd.append('files', b, `frame-${idx + 1}.jpg`)
+      })
+
+      const resp = await axiosApi.post('/attendance/checkin', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+
+      const { student_id, status, confidence } = resp.data || {}
+      if (!student_id) {
+        toast.error('No match found')
+        setLoading(false)
+        return
+      }
+
+      let name = student_id
+      try {
+        const s = await axiosApi.get(`/students/${student_id}`)
+        name = s?.data?.name || name
+      } catch {
+        // ignore
+      }
+
+      setDetectedPerson({
+        name,
+        student_id,
+        status: status || 'Present',
+        confidence: Number(confidence || 0),
+        timestamp: new Date().toLocaleTimeString(),
+      })
+      toast.success('Face recognized')
     } catch (error) {
       console.error('Error capturing frame:', error)
-      toast.error('Failed to capture frame')
-      setLoading(false)
+      toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Recognition failed')
     }
+    setLoading(false)
   }
 
   return (
@@ -212,14 +258,24 @@ export default function ScannerPage() {
                 </div>
 
                 <div className="bg-glass rounded-lg p-4">
+                  <p className="text-gray-400 text-sm">Status</p>
+                  <p className="text-lg font-bold text-white mt-1">
+                    {detectedPerson.status}
+                  </p>
+                </div>
+
+                <div className="bg-glass rounded-lg p-4">
                   <p className="text-gray-400 text-sm">Time</p>
                   <p className="text-lg font-bold text-white mt-1">
                     {detectedPerson.timestamp}
                   </p>
                 </div>
 
-                <button className="btn-primary w-full">
-                  ✅ Mark Attendance
+                <button
+                  className="btn-primary w-full"
+                  onClick={() => toast.success('Attendance recorded in database')}
+                >
+                  ✅ Attendance Saved
                 </button>
                 <button
                   onClick={() => setDetectedPerson(null)}

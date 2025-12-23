@@ -66,7 +66,7 @@ export const useAttendanceStore = create((set, get) => ({
     set({ loading: true })
     try {
       const response = await axiosInstance.get('/attendance', {
-        params: { class_id: classId, date },
+        params: { class: classId, date },
       })
       set({ attendance: response.data, loading: false })
     } catch (err) {
@@ -79,7 +79,7 @@ export const useAttendanceStore = create((set, get) => ({
     set({ loading: true })
     try {
       const response = await axiosInstance.get('/students', {
-        params: { class_id: classId },
+        params: { class: classId },
       })
       set({ students: response.data, loading: false })
     } catch (err) {

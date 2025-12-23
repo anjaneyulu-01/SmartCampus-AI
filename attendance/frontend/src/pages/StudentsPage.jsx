@@ -1,74 +1,133 @@
-import { useEffect, useState } from 'react'
-import { useAttendanceStore } from '../stores'
+import { useEffect, useMemo, useState } from 'react'
+import { useAttendanceStore, useAuthStore, axiosApi } from '../stores'
 import { motion } from 'framer-motion'
-import { Users, Search, MoreVertical, UserPlus, Edit2 } from 'lucide-react'
+import { Users, Search, MoreVertical, UserPlus, Edit2, X, Loader, Clock, ShieldAlert, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function StudentsPage() {
   const fetchStudents = useAttendanceStore((state) => state.fetchStudents)
   const students = useAttendanceStore((state) => state.students)
-  const [selectedClass, setSelectedClass] = useState('10a')
+  const markAttendance = useAttendanceStore((state) => state.markAttendance)
+  const user = useAuthStore((state) => state.user)
+
+  const [selectedClass, setSelectedClass] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [selectedStudent, setSelectedStudent] = useState(null)
+  const [timeline, setTimeline] = useState([])
+  const [timelineLoading, setTimelineLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const [form, setForm] = useState({
+    student_id: '',
+    name: '',
+    class_name: '',
+    mobile: '',
+    seat_row: '',
+    seat_col: '',
+    avatar: null,
+    face: null,
+  })
 
   useEffect(() => {
     fetchStudents(selectedClass)
   }, [selectedClass, fetchStudents])
 
-  // Demo data
-  const demoStudents = [
-    {
-      id: 1,
-      name: 'Aarav Singh',
-      student_id: 'STU001',
-      email: 'aarav@example.com',
-      avatar: '👨‍🎓',
-      attendance_rate: 95,
-      status: 'present',
-    },
-    {
-      id: 2,
-      name: 'Ananya Sharma',
-      student_id: 'STU002',
-      email: 'ananya@example.com',
-      avatar: '👩‍🎓',
-      attendance_rate: 88,
-      status: 'present',
-    },
-    {
-      id: 3,
-      name: 'Arjun Patel',
-      student_id: 'STU003',
-      email: 'arjun@example.com',
-      avatar: '👨‍🎓',
-      attendance_rate: 92,
-      status: 'present',
-    },
-    {
-      id: 4,
-      name: 'Diya Gupta',
-      student_id: 'STU004',
-      email: 'diya@example.com',
-      avatar: '👩‍🎓',
-      attendance_rate: 85,
-      status: 'absent',
-    },
-    {
-      id: 5,
-      name: 'Ravi Kumar',
-      student_id: 'STU005',
-      email: 'ravi@example.com',
-      avatar: '👨‍🎓',
-      attendance_rate: 78,
-      status: 'suspicious',
-    },
-  ]
+  const classOptions = useMemo(() => {
+    const unique = new Set()
+    ;(students || []).forEach((s) => {
+      if (s.class) unique.add(String(s.class))
+    })
+    return ['all', ...Array.from(unique).sort()]
+  }, [students])
 
-  const filteredStudents = (students.length > 0 ? students : demoStudents).filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.student_id.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const filteredStudents = (students || []).filter((student) => {
+    const q = searchTerm.toLowerCase()
+    return (
+      String(student?.name || '').toLowerCase().includes(q) ||
+      String(student?.id || '').toLowerCase().includes(q)
+    )
+  })
+
+  const canManageStudents = (user?.role || '').toLowerCase() === 'hod' || (user?.role || '').toLowerCase() === 'admin'
+
+  const openStudentDetails = async (student) => {
+    setSelectedStudent(student)
+    setTimeline([])
+    setTimelineLoading(true)
+    try {
+      const res = await axiosApi.get(`/attendance/timeline/${student.id}`)
+      setTimeline(res.data || [])
+    } catch (e) {
+      console.error(e)
+      toast.error('Failed to load timeline')
+    } finally {
+      setTimelineLoading(false)
+    }
+  }
+
+  const handleSaveStudent = async (e) => {
+    e.preventDefault()
+    if (!form.student_id || !form.name) {
+      toast.error('Student ID and Name are required')
+      return
+    }
+
+    try {
+      setSaving(true)
+      const fd = new FormData()
+      fd.append('student_id', form.student_id)
+      fd.append('name', form.name)
+      if (form.class_name) fd.append('class_name', form.class_name)
+      if (form.mobile) fd.append('mobile', form.mobile)
+      if (form.seat_row) fd.append('seat_row', form.seat_row)
+      if (form.seat_col) fd.append('seat_col', form.seat_col)
+      if (form.avatar) fd.append('avatar', form.avatar)
+      if (form.face) fd.append('face', form.face)
+
+      await axiosApi.post('/students', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+
+      toast.success('Student saved to database')
+      setShowAddModal(false)
+      setForm({
+        student_id: '',
+        name: '',
+        class_name: '',
+        mobile: '',
+        seat_row: '',
+        seat_col: '',
+        avatar: null,
+        face: null,
+      })
+      await fetchStudents(selectedClass)
+    } catch (err) {
+      console.error(err)
+      toast.error(err?.response?.data?.error || 'Failed to save student')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleMark = async (studentId, status) => {
+    const ok = await markAttendance(studentId, status)
+    if (ok) {
+      toast.success(`Marked ${status}`)
+      await fetchStudents(selectedClass)
+      if (selectedStudent?.id === studentId) {
+        try {
+          setTimelineLoading(true)
+          const res = await axiosApi.get(`/attendance/timeline/${studentId}`)
+          setTimeline(res.data || [])
+        } finally {
+          setTimelineLoading(false)
+        }
+      }
+    } else {
+      toast.error('Failed to mark attendance')
+    }
+  }
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -97,13 +156,15 @@ export default function StudentsPage() {
             <h1 className="text-3xl font-bold text-white">Students</h1>
             <p className="text-gray-400 mt-1">Manage student records and attendance</p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <UserPlus size={20} />
-            Add Student
-          </button>
+          {canManageStudents && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <UserPlus size={20} />
+              Add Student
+            </button>
+          )}
         </div>
       </motion.div>
 
@@ -128,10 +189,11 @@ export default function StudentsPage() {
             onChange={(e) => setSelectedClass(e.target.value)}
             className="input-field max-w-xs"
           >
-            <option className="bg-slate-900 text-white" value="10a">Class 10-A</option>
-            <option className="bg-slate-900 text-white" value="10b">Class 10-B</option>
-            <option className="bg-slate-900 text-white" value="11a">Class 11-A</option>
-            <option className="bg-slate-900 text-white" value="11b">Class 11-B</option>
+            {classOptions.map((c) => (
+              <option key={c} className="bg-slate-900 text-white" value={c}>
+                {c === 'all' ? 'All Classes' : c}
+              </option>
+            ))}
           </select>
         </div>
       </motion.div>
@@ -146,10 +208,27 @@ export default function StudentsPage() {
             key={student.id}
             variants={itemVariants}
             className="card-hover p-6 cursor-pointer group"
+            onClick={() => openStudentDetails(student)}
           >
             <div className="flex items-start justify-between mb-4">
-              <div className="text-5xl">{student.avatar || '👤'}</div>
-              <button className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-glass-light rounded-lg">
+              <div className="text-5xl">
+                {student.avatarUrl ? (
+                  <img
+                    src={student.avatarUrl}
+                    alt={student.name}
+                    className="w-14 h-14 rounded-full object-cover border border-white/10"
+                  />
+                ) : (
+                  '👤'
+                )}
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openStudentDetails(student)
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-glass-light rounded-lg"
+              >
                 <MoreVertical size={18} className="text-gray-400" />
               </button>
             </div>
@@ -164,13 +243,13 @@ export default function StudentsPage() {
                 <div className="bg-glass rounded-lg p-3">
                   <p className="text-xs text-gray-400">Student ID</p>
                   <p className="font-bold text-sm text-cyan-400 mt-1">
-                    {student.student_id}
+                    {student.id}
                   </p>
                 </div>
                 <div className="bg-glass rounded-lg p-3">
                   <p className="text-xs text-gray-400">Attendance</p>
                   <p className="font-bold text-sm text-green-400 mt-1">
-                    {student.attendance_rate}%
+                    {student.attendancePct}%
                   </p>
                 </div>
               </div>
@@ -188,10 +267,21 @@ export default function StudentsPage() {
                 <span className="text-sm text-gray-300 capitalize">
                   {student.status || 'Present'}
                 </span>
+                {student.class && (
+                  <span className="ml-auto text-xs text-gray-400 bg-glass px-3 py-1 rounded-full">
+                    {student.class}
+                  </span>
+                )}
               </div>
 
               <div className="pt-3 border-t border-white/10">
-                <button className="btn-secondary w-full flex items-center justify-center gap-2 text-sm">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openStudentDetails(student)
+                  }}
+                  className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
+                >
                   <Edit2 size={16} />
                   View Details
                 </button>
@@ -239,6 +329,195 @@ export default function StudentsPage() {
           </p>
         </div>
       </motion.div>
+
+      {/* Add Student Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => !saving && setShowAddModal(false)}
+          />
+          <div className="relative card w-full max-w-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Add Student</h2>
+              <button
+                onClick={() => !saving && setShowAddModal(false)}
+                className="p-2 rounded-lg hover:bg-glass-light"
+              >
+                <X size={18} className="text-gray-300" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStudent} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-300">Student ID</label>
+                  <input
+                    value={form.student_id}
+                    onChange={(e) => setForm((p) => ({ ...p, student_id: e.target.value }))}
+                    className="input-field mt-2"
+                    placeholder="e.g. CSE-A-02"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-300">Name</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                    className="input-field mt-2"
+                    placeholder="Student name"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-300">Class</label>
+                  <input
+                    value={form.class_name}
+                    onChange={(e) => setForm((p) => ({ ...p, class_name: e.target.value }))}
+                    className="input-field mt-2"
+                    placeholder="e.g. CSE-A"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-300">Mobile</label>
+                  <input
+                    value={form.mobile}
+                    onChange={(e) => setForm((p) => ({ ...p, mobile: e.target.value }))}
+                    className="input-field mt-2"
+                    placeholder="Phone"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-300">Seat Row</label>
+                  <input
+                    value={form.seat_row}
+                    onChange={(e) => setForm((p) => ({ ...p, seat_row: e.target.value }))}
+                    className="input-field mt-2"
+                    placeholder="e.g. 1"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-300">Seat Col</label>
+                  <input
+                    value={form.seat_col}
+                    onChange={(e) => setForm((p) => ({ ...p, seat_col: e.target.value }))}
+                    className="input-field mt-2"
+                    placeholder="e.g. 2"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-300">Avatar (optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setForm((p) => ({ ...p, avatar: e.target.files?.[0] || null }))}
+                    className="input-field mt-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-300">Face Image (optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setForm((p) => ({ ...p, face: e.target.files?.[0] || null }))}
+                    className="input-field mt-2"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" className="btn-secondary" onClick={() => !saving && setShowAddModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
+                  {saving ? <Loader size={18} className="animate-spin" /> : null}
+                  Save Student
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Student Details Modal */}
+      {selectedStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !timelineLoading && setSelectedStudent(null)} />
+          <div className="relative card w-full max-w-3xl p-6">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">{selectedStudent.name}</h2>
+                <p className="text-gray-400 text-sm">{selectedStudent.id}{selectedStudent.class ? ` • ${selectedStudent.class}` : ''}</p>
+              </div>
+              <button onClick={() => setSelectedStudent(null)} className="p-2 rounded-lg hover:bg-glass-light">
+                <X size={18} className="text-gray-300" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-1 space-y-3">
+                <div className="bg-glass rounded-xl p-4">
+                  <p className="text-gray-400 text-sm">Status</p>
+                  <p className="text-white font-bold mt-1 capitalize">{selectedStudent.status || 'unknown'}</p>
+                </div>
+                <div className="bg-glass rounded-xl p-4">
+                  <p className="text-gray-400 text-sm">Trust Score</p>
+                  <p className="text-white font-bold mt-1">{selectedStudent.trustScore ?? 100}</p>
+                </div>
+                <div className="bg-glass rounded-xl p-4">
+                  <p className="text-gray-400 text-sm">Attendance (30d)</p>
+                  <p className="text-white font-bold mt-1">{selectedStudent.attendancePct}%</p>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <button
+                    className="btn-primary flex items-center justify-center gap-2"
+                    onClick={() => handleMark(selectedStudent.id, 'Present')}
+                  >
+                    <CheckCircle size={18} /> Mark Present
+                  </button>
+                  <button
+                    className="btn-danger flex items-center justify-center gap-2"
+                    onClick={() => handleMark(selectedStudent.id, 'Suspicious')}
+                  >
+                    <ShieldAlert size={18} /> Mark Suspicious
+                  </button>
+                </div>
+              </div>
+
+              <div className="md:col-span-2">
+                <div className="bg-glass rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-white font-bold">Recent Timeline</h3>
+                    <div className="flex items-center gap-2 text-gray-400 text-sm">
+                      <Clock size={16} /> last 50
+                    </div>
+                  </div>
+
+                  {timelineLoading ? (
+                    <div className="py-8 flex items-center justify-center text-gray-300 gap-2">
+                      <Loader size={18} className="animate-spin" /> Loading...
+                    </div>
+                  ) : timeline.length === 0 ? (
+                    <div className="py-8 text-center text-gray-400">No events yet</div>
+                  ) : (
+                    <div className="max-h-[45vh] overflow-auto divide-y divide-white/10">
+                      {timeline.map((e) => (
+                        <div key={e.id} className="py-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-white font-semibold capitalize">{e.type}</div>
+                            <div className="text-gray-400 text-sm">{e.ts ? new Date(e.ts).toLocaleString() : ''}</div>
+                          </div>
+                          {e.label ? <div className="text-gray-300 text-sm mt-1">{e.label}</div> : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   )
 }

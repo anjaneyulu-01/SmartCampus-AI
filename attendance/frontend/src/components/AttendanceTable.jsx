@@ -1,50 +1,7 @@
 import { motion } from 'framer-motion'
-import { ChevronRight, MoreVertical } from 'lucide-react'
+import { MoreVertical } from 'lucide-react'
 
-const demoAttendance = [
-  {
-    id: 1,
-    student_name: 'Aarav Singh',
-    student_id: 'STU001',
-    time: '08:45 AM',
-    status: 'present',
-    avatar: '👨‍🎓',
-  },
-  {
-    id: 2,
-    student_name: 'Ananya Sharma',
-    student_id: 'STU002',
-    time: '08:50 AM',
-    status: 'present',
-    avatar: '👩‍🎓',
-  },
-  {
-    id: 3,
-    student_name: 'Arjun Patel',
-    student_id: 'STU003',
-    time: '09:15 AM',
-    status: 'late',
-    avatar: '👨‍🎓',
-  },
-  {
-    id: 4,
-    student_name: 'Diya Gupta',
-    student_id: 'STU004',
-    time: '-',
-    status: 'absent',
-    avatar: '👩‍🎓',
-  },
-  {
-    id: 5,
-    student_name: 'Ravi Kumar',
-    student_id: 'STU005',
-    time: '08:42 AM',
-    status: 'suspicious',
-    avatar: '👨‍🎓',
-  },
-]
-
-export default function AttendanceTable() {
+export default function AttendanceTable({ records = [] }) {
   const getStatusBadge = (status) => {
     const badges = {
       present: { color: 'bg-green-500/20 text-green-300 border-green-500/30', label: '✓ Present' },
@@ -55,6 +12,8 @@ export default function AttendanceTable() {
     const badge = badges[status] || badges.absent
     return badge
   }
+
+  const safeRecords = Array.isArray(records) ? records : []
 
   return (
     <div className="overflow-x-auto">
@@ -79,11 +38,12 @@ export default function AttendanceTable() {
           </tr>
         </thead>
         <tbody>
-          {demoAttendance.map((record, index) => {
-            const badge = getStatusBadge(record.status)
+          {safeRecords.map((record, index) => {
+            const badge = getStatusBadge((record.status || 'absent').toLowerCase())
+            const timeLabel = record.timestamp ? new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'
             return (
               <motion.tr
-                key={record.id}
+                key={`${record.student_id}-${index}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
@@ -91,10 +51,18 @@ export default function AttendanceTable() {
               >
                 <td className="py-4 px-4">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{record.avatar}</span>
+                    {record.avatarUrl ? (
+                      <img
+                        src={record.avatarUrl}
+                        alt={record.name}
+                        className="w-10 h-10 rounded-full object-cover border border-white/10"
+                      />
+                    ) : (
+                      <span className="text-2xl">👤</span>
+                    )}
                     <div>
                       <p className="font-medium text-white">
-                        {record.student_name}
+                        {record.name || 'Unknown'}
                       </p>
                       <p className="text-xs text-gray-500">
                         {record.student_id}
@@ -108,7 +76,7 @@ export default function AttendanceTable() {
                   </code>
                 </td>
                 <td className="py-4 px-4">
-                  <p className="text-white font-medium">{record.time}</p>
+                  <p className="text-white font-medium">{timeLabel}</p>
                 </td>
                 <td className="py-4 px-4">
                   <span
@@ -128,19 +96,11 @@ export default function AttendanceTable() {
         </tbody>
       </table>
 
-      {/* Footer with pagination */}
-      <div className="flex items-center justify-between p-4 border-t border-white/10 mt-4">
-        <p className="text-sm text-gray-400">
-          Showing <span className="font-bold text-white">5</span> of{' '}
-          <span className="font-bold text-white">125</span> records
-        </p>
-        <div className="flex gap-2">
-          <button className="btn-secondary px-4 py-2 text-sm">Previous</button>
-          <button className="btn-primary px-4 py-2 text-sm flex items-center gap-1">
-            Next <ChevronRight size={16} />
-          </button>
+      {safeRecords.length === 0 && (
+        <div className="p-8 text-center text-gray-400">
+          No attendance records for this date.
         </div>
-      </div>
+      )}
     </div>
   )
 }

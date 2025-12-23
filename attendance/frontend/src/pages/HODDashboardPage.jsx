@@ -5,9 +5,12 @@ import { useAuthStore } from '../stores';
 import StatCard from '../components/StatCard';
 import axios from 'axios';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const HODDashboardPage = () => {
   const { user, token } = useAuthStore();
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [faculty, setFaculty] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -234,7 +237,7 @@ const HODDashboardPage = () => {
             <div className="card overflow-hidden">
               <div className="sticky top-0 z-20 bg-slate-950/40 backdrop-blur-md p-6 border-b border-white/10 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-white">Faculty Members</h3>
-                <button className="btn-primary px-4 py-2">
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/faculty')}>
                   Add Faculty
                 </button>
               </div>
@@ -271,7 +274,7 @@ const HODDashboardPage = () => {
             <div className="card overflow-hidden">
               <div className="sticky top-0 z-20 bg-slate-950/40 backdrop-blur-md p-6 border-b border-white/10 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-white">Staff & Workers</h3>
-                <button className="btn-primary px-4 py-2">
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/workers')}>
                   Add Staff
                 </button>
               </div>
@@ -310,7 +313,7 @@ const HODDashboardPage = () => {
             <div className="card overflow-hidden">
               <div className="sticky top-0 z-20 bg-slate-950/40 backdrop-blur-md p-6 border-b border-white/10 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-white">Students</h3>
-                <button className="btn-primary px-4 py-2">
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/students')}>
                   Add Student
                 </button>
               </div>
@@ -362,7 +365,7 @@ const HODDashboardPage = () => {
             <div className="card overflow-hidden">
               <div className="p-6 border-b border-white/10 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-white">Department Announcements</h3>
-                <button className="btn-primary px-4 py-2">
+                <button className="btn-primary px-4 py-2" onClick={() => toast('Announcements editor coming next')}> 
                   New Announcement
                 </button>
               </div>

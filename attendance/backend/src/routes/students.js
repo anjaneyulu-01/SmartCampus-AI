@@ -13,11 +13,13 @@ const AVATARS_DIR = path.join(path.dirname(__dirname), '..', 'avatars');
 const KNOWN_FACES_DIR = path.join(path.dirname(__dirname), '..', 'known_faces');
 
 // Ensure directories exist
-[AVATARS_DIR, KNOWN_FACES_DIR].forEach(dir => {
+[AVATARS_DIR, KNOWN_FACES_DIR].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
+
+const router = express.Router();
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -30,24 +32,18 @@ const storage = multer.diskStorage({
     } else {
       cb(null, AVATARS_DIR);
     }
-    router.get('/', requireAuth, async (req, res) => {
+  },
   filename: (req, file, cb) => {
-        const classFilter = req.query.class || req.query.class_id || req.query.class_name;
-        const whereClause = classFilter && String(classFilter).toLowerCase() !== 'all' ? 'WHERE s.class = ?' : '';
-        const params = whereClause ? [classFilter] : [];
-
     const studentId = req.body.student_id || 'unknown';
     const ext = path.extname(file.originalname) || '.jpg';
     cb(null, `${studentId}${ext}`);
-  }
+  },
 });
 
-const upload = multer({ 
+const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
-
-const router = express.Router();
 
 // Helper function to calculate attendance percentage
 function calculateAttendancePercentage(studentId) {
@@ -56,7 +52,6 @@ function calculateAttendancePercentage(studentId) {
       SELECT COUNT(DISTINCT DATE(ts)) as present_days
       FROM attendance_events
       WHERE student_id = ?
-          ${whereClause}
       AND type = 'checkin'
       AND ts >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     `, [studentId])
@@ -81,13 +76,16 @@ async function getAvatarUrlForStudent(studentId) {
 /**
  * GET /api/students - Get all students
  */
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
-    const students = await dbAll(`
+    const classFilter = req.query.class || req.query.class_id || req.query.class_name;
+    const params = [];
+
+    let query = `
       SELECT s.id, s.name, s.avatar_url, s.seat_row, s.seat_col,
              ts.score as trust_score,
-             CASE 
-               WHEN ae.ts IS NOT NULL AND ae.ts > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN 
+             CASE
+               WHEN ae.ts IS NOT NULL AND ae.ts > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN
                  CASE WHEN ae.type = 'suspicious' THEN 'suspicious' ELSE 'present' END
                WHEN ae.ts IS NOT NULL AND ae.ts > DATE_SUB(NOW(), INTERVAL 30 MINUTE) THEN 'late'
                ELSE 'absent'
@@ -97,13 +95,20 @@ router.get('/', async (req, res) => {
       FROM students s
       LEFT JOIN trust_scores ts ON s.id = ts.student_id
       LEFT JOIN (
-        SELECT student_id, MAX(ts) as ts, 
+        SELECT student_id, MAX(ts) as ts,
                SUBSTRING_INDEX(GROUP_CONCAT(type ORDER BY ts DESC), ',', 1) as type
         FROM attendance_events
         WHERE DATE(ts) = CURDATE()
         GROUP BY student_id
       ) ae ON s.id = ae.student_id
-    `);
+    `;
+
+    if (classFilter && String(classFilter).toLowerCase() !== 'all') {
+      query += ' WHERE s.class = ?';
+      params.push(classFilter);
+    }
+
+    const students = await dbAll(query, params);
     
     const studentsWithAttendance = await Promise.all(
       students.map(async (s) => ({

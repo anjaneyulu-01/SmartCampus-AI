@@ -15,12 +15,30 @@ import AttendanceTable from '../components/AttendanceTable'
 export default function DashboardPage() {
   const stats = useAttendanceStore((state) => state.stats)
   const fetchStats = useAttendanceStore((state) => state.fetchStats)
+  const attendance = useAttendanceStore((state) => state.attendance)
+  const fetchAttendance = useAttendanceStore((state) => state.fetchAttendance)
+  const students = useAttendanceStore((state) => state.students)
+  const fetchStudents = useAttendanceStore((state) => state.fetchStudents)
   const user = useAuthStore((state) => state.user)
   const [selectedClass, setSelectedClass] = useState('all')
 
   useEffect(() => {
     fetchStats()
+    fetchStudents('all')
   }, [fetchStats])
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    fetchAttendance(selectedClass, today)
+  }, [fetchAttendance, selectedClass])
+
+  const classOptions = (() => {
+    const unique = new Set()
+    ;(students || []).forEach((s) => {
+      if (s.class) unique.add(String(s.class))
+    })
+    return ['all', ...Array.from(unique).sort()]
+  })()
 
   const demoStats = {
     total_students: 125,
@@ -151,13 +169,14 @@ export default function DashboardPage() {
               onChange={(e) => setSelectedClass(e.target.value)}
               className="input-field max-w-xs"
             >
-              <option className="bg-slate-900 text-white" value="all">All Classes</option>
-              <option className="bg-slate-900 text-white" value="10a">Class 10-A</option>
-              <option className="bg-slate-900 text-white" value="10b">Class 10-B</option>
-              <option className="bg-slate-900 text-white" value="11a">Class 11-A</option>
+              {classOptions.map((c) => (
+                <option key={c} className="bg-slate-900 text-white" value={c}>
+                  {c === 'all' ? 'All Classes' : c}
+                </option>
+              ))}
             </select>
           </div>
-          <AttendanceTable />
+          <AttendanceTable records={attendance} />
         </div>
       </motion.div>
 
