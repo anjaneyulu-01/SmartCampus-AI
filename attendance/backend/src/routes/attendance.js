@@ -101,17 +101,23 @@ router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res
       return res.status(400).json({ error: 'student_id required' });
     }
     
-    const eventType = status?.toLowerCase() === 'suspicious' ? 'suspicious' : 'checkin';
-    const label = `Marked: ${status || 'Present'}`;
+    const normalized = (status || 'present').toString().trim().toLowerCase();
+    const eventType = normalized === 'suspicious' ? 'suspicious' : normalized === 'absent' ? 'absent' : 'checkin';
+    const label = `Marked: ${normalized}`;
     
     await dbRun(
       'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
       [student_id, student_id, 'student', eventType, label]
     );
     
-    if (status?.toLowerCase() === 'suspicious') {
+    if (normalized === 'suspicious') {
       await dbRun(
         'UPDATE trust_scores SET score = GREATEST(score - 5, 0), updated_at = NOW() WHERE student_id = ?',
+        [student_id]
+      );
+    } else if (normalized === 'absent') {
+      await dbRun(
+        'UPDATE trust_scores SET streak = 0, updated_at = NOW() WHERE student_id = ?',
         [student_id]
       );
     } else {
@@ -125,7 +131,7 @@ router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res
     const avatarUrl = await getAvatarUrlForStudent(student_id);
     broadcastPresence({
       student_id,
-      status: status || 'Present',
+      status: normalized,
       timestamp: new Date().toISOString(),
       avatarUrl
     });

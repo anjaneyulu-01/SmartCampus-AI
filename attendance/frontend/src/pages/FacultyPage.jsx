@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { GraduationCap, Search } from 'lucide-react'
 import { axiosApi } from '../stores'
+import { getAvatarColor, getInitials } from '../utils'
 
 export default function FacultyPage() {
   const [faculty, setFaculty] = useState([])
@@ -76,9 +77,18 @@ export default function FacultyPage() {
           {filtered.map((f) => (
             <div key={f.id || f.email || f.name} className="card-hover p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-lg font-bold text-white">{f.name || 'Faculty'}</p>
-                  <p className="text-sm text-gray-400 mt-1">{f.email || ''}</p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold ${getAvatarColor(
+                      f.name || 'Faculty',
+                    )}`}
+                  >
+                    {getInitials(f.name || 'Faculty')}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold text-white truncate">{f.name || 'Faculty'}</p>
+                    <p className="text-sm text-gray-400 mt-1 truncate">{f.email || ''}</p>
+                  </div>
                 </div>
                 <GraduationCap className="text-green-400 opacity-60" />
               </div>

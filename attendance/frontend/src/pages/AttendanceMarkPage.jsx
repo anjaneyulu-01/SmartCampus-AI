@@ -8,6 +8,7 @@ function badgeClass(status) {
   if (s === 'present') return 'bg-green-500/20 text-green-300 border border-green-500/30'
   if (s === 'suspicious') return 'bg-red-500/20 text-red-300 border border-red-500/30'
   if (s === 'late') return 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+  if (s === 'absent') return 'bg-slate-500/20 text-slate-200 border border-slate-400/20'
   return 'bg-white/10 text-gray-200 border border-white/10'
 }
 
@@ -20,6 +21,7 @@ export default function AttendanceMarkPage() {
 
   const [department, setDepartment] = useState(null)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [pendingDate, setPendingDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [marking, setMarking] = useState(null)
@@ -67,6 +69,17 @@ export default function AttendanceMarkPage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+            <input
+              type="date"
+              value={pendingDate}
+              onChange={(e) => setPendingDate(e.target.value)}
+              className="input-field"
+            />
+            <button className="btn-secondary px-4 py-2" onClick={() => setDate(pendingDate)}>
+              Check
+            </button>
+          </div>
           <h1 className="text-3xl font-bold text-white">Mark Attendance</h1>
           <p className="text-gray-400 mt-2">
             Branch: <span className="text-gray-200">{department?.name || '...'}</span> • Section:{' '}
@@ -74,12 +87,6 @@ export default function AttendanceMarkPage() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="input-field"
-          />
           <button className="btn-secondary px-4 py-2" onClick={() => navigate(`/attendance/${deptId}`)}>
             Back to Sections
           </button>
@@ -146,6 +153,13 @@ export default function AttendanceMarkPage() {
                           onClick={() => mark(r.student_id, 'present')}
                         >
                           Present
+                        </button>
+                        <button
+                          className="btn-secondary px-3 py-2"
+                          disabled={marking === r.student_id}
+                          onClick={() => mark(r.student_id, 'absent')}
+                        >
+                          Absent
                         </button>
                         <button
                           className="btn-secondary px-3 py-2"

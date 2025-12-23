@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Briefcase, Search } from 'lucide-react'
 import { axiosApi } from '../stores'
+import { getAvatarColor, getInitials } from '../utils'
 
 export default function WorkersPage() {
   const [workers, setWorkers] = useState([])
@@ -77,9 +78,18 @@ export default function WorkersPage() {
           {filtered.map((w) => (
             <div key={w.id || w.email || w.name} className="card-hover p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-lg font-bold text-white">{w.name || 'Worker'}</p>
-                  <p className="text-sm text-gray-400 mt-1">{w.email || ''}</p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold ${getAvatarColor(
+                      w.name || 'Worker',
+                    )}`}
+                  >
+                    {getInitials(w.name || 'Worker')}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold text-white truncate">{w.name || 'Worker'}</p>
+                    <p className="text-sm text-gray-400 mt-1 truncate">{w.email || ''}</p>
+                  </div>
                 </div>
                 <Briefcase className="text-emerald-400 opacity-60" />
               </div>
