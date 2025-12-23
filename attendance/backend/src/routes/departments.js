@@ -107,4 +107,29 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
   }
 })
 
+/**
+ * GET /api/departments/:id/classes - Get sections for a department
+ */
+router.get('/:id/classes', requireAuth, async (req, res) => {
+  try {
+    const deptId = Number(req.params.id)
+    if (!Number.isFinite(deptId)) {
+      return res.status(400).json({ error: 'Invalid department id' })
+    }
+
+    const rows = await dbAll(
+      `SELECT c.id, c.name, c.code, c.academic_year, c.semester, c.total_students, c.class_mentor,
+              (SELECT COUNT(*) FROM students s WHERE s.class = c.code) AS enrolled_students
+       FROM classes c
+       WHERE c.department_id = ?
+       ORDER BY c.name ASC`,
+      [deptId]
+    )
+    res.json(rows || [])
+  } catch (error) {
+    console.error('[ERROR] Get department classes:', error)
+    res.status(500).json({ error: 'Failed to fetch classes' })
+  }
+})
+
 export default router

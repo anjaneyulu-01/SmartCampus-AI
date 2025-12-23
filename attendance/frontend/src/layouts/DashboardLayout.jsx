@@ -6,7 +6,9 @@ import {
   GraduationCap,
   Briefcase,
   BookOpenText,
+  Building2,
   BarChart3,
+  ShieldAlert,
   LogOut,
   Menu,
   X,
@@ -16,11 +18,13 @@ import { cn } from '../utils'
 
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Attendance', icon: Building2, path: '/attendance' },
   { label: 'Students', icon: Users, path: '/students' },
   { label: 'Faculty', icon: GraduationCap, path: '/faculty' },
   { label: 'Workers', icon: Briefcase, path: '/workers' },
   { label: 'Library', icon: BookOpenText, path: '/library' },
   { label: 'Insights', icon: BarChart3, path: '/insights' },
+  { label: 'Announcements', icon: ShieldAlert, path: '/announcements' },
 ]
 
 export default function DashboardLayout() {

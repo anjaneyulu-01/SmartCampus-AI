@@ -12,6 +12,7 @@ import insightRoutes from './src/routes/insights.js';
 import departmentRoutes from './src/routes/departments.js';
 import facultyRoutes from './src/routes/faculty.js';
 import workerRoutes from './src/routes/workers.js';
+import announcementRoutes from './src/routes/announcements.js';
 import { setupWebSocket } from './src/websocket/websocket.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,6 +58,7 @@ app.use('/api/workers', workerRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api', attendanceRoutes); // Also mount for /api/checkin, /api/simulate-checkin, /api/timeline
+app.use('/api/announcements', announcementRoutes);
 app.use('/api/trust', trustRoutes);
 app.use('/api', insightRoutes);
 

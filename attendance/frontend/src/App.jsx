@@ -12,6 +12,10 @@ import WorkersPage from './pages/WorkersPage'
 import LibraryPage from './pages/LibraryPage'
 import StudentsPage from './pages/StudentsPage'
 import InsightsPage from './pages/InsightsPage'
+import AttendanceBranchesPage from './pages/AttendanceBranchesPage'
+import AttendanceSectionsPage from './pages/AttendanceSectionsPage'
+import AttendanceMarkPage from './pages/AttendanceMarkPage'
+import AnnouncementsPage from './pages/AnnouncementsPage'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -58,6 +62,10 @@ function App() {
             <Route path="workers" element={<WorkersPage />} />
             <Route path="library" element={<LibraryPage />} />
             <Route path="insights" element={<InsightsPage />} />
+            <Route path="attendance" element={<AttendanceBranchesPage />} />
+            <Route path="attendance/:departmentId" element={<AttendanceSectionsPage />} />
+            <Route path="attendance/:departmentId/:classCode" element={<AttendanceMarkPage />} />
+            <Route path="announcements" element={<AnnouncementsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -270,6 +270,53 @@ const HODDashboardPage = () => {
             </div>
           )}
 
+          {activeTab === 'attendance' && (
+            <div className="card p-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Attendance</h3>
+                  <p className="text-sm text-gray-400 mt-1">Open branches → sections → mark attendance</p>
+                </div>
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/attendance')}>
+                  Open Attendance
+                </button>
+              </div>
+
+              <div className="mt-6">
+                <div className="text-sm font-semibold text-white mb-3">Quick Branches</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(branches || []).slice(0, 6).map((b) => (
+                    <button
+                      key={b.id || b.code}
+                      className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg p-4 text-left transition-colors"
+                      onClick={() => navigate(`/attendance/${b.id}`)}
+                    >
+                      <div className="text-white font-semibold">{b.name}</div>
+                      <div className="text-xs text-gray-400 mt-1">{b.code} • {b.total_sections ?? 0} sections</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'announcements' && (
+            <div className="card p-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Announcements</h3>
+                  <p className="text-sm text-gray-400 mt-1">Create and view announcements</p>
+                </div>
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/announcements')}>
+                  Open Announcements
+                </button>
+              </div>
+              <div className="mt-6 text-sm text-gray-300">
+                Use the Announcements page to post new announcements.
+              </div>
+            </div>
+          )}
+
           {activeTab === 'staff' && (
             <div className="card overflow-hidden">
               <div className="sticky top-0 z-20 bg-slate-950/40 backdrop-blur-md p-6 border-b border-white/10 flex justify-between items-center">

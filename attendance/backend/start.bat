@@ -23,7 +23,7 @@ if %ERRORLEVEL% EQU 0 (
         echo DB_USER=root
         echo DB_PASSWORD=%MYSQL_PASSWORD%
         echo DB_NAME=attendance_db
-        echo PORT=8000
+        echo PORT=8001
     ) > .env
     
     echo .env file updated successfully!
