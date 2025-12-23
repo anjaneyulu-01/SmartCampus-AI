@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+face-recognition
+opencv-python-headless
+pillow
+numpy

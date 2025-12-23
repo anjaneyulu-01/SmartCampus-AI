@@ -1,0 +1,11 @@
+node_modules/
+*.log
+.env
+.DS_Store
+*.db-journal
+models/
+__pycache__/
+*.pyc
+temp/
+*.db
+
