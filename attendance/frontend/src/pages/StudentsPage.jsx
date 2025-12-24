@@ -17,6 +17,7 @@ export default function StudentsPage() {
   const [timeline, setTimeline] = useState([])
   const [timelineLoading, setTimelineLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const [form, setForm] = useState({
     student_id: '',
@@ -50,6 +51,31 @@ export default function StudentsPage() {
   })
 
   const canManageStudents = (user?.role || '').toLowerCase() === 'hod' || (user?.role || '').toLowerCase() === 'admin'
+
+  const handleDeleteStudent = async () => {
+    if (!selectedStudent?.id) return
+    if (!canManageStudents) {
+      toast.error('Insufficient permissions')
+      return
+    }
+
+    const ok = window.confirm(`Delete student ${selectedStudent.name} (${selectedStudent.id})? This cannot be undone.`)
+    if (!ok) return
+
+    try {
+      setDeleting(true)
+      await axiosApi.delete(`/students/${selectedStudent.id}`)
+      toast.success('Student deleted')
+      setSelectedStudent(null)
+      setTimeline([])
+      await fetchStudents(selectedClass)
+    } catch (err) {
+      console.error(err)
+      toast.error(err?.response?.data?.error || 'Failed to delete student')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const openStudentDetails = async (student) => {
     setSelectedStudent(student)
@@ -448,9 +474,21 @@ export default function StudentsPage() {
                 <h2 className="text-xl font-bold text-white">{selectedStudent.name}</h2>
                 <p className="text-gray-400 text-sm">{selectedStudent.id}{selectedStudent.class ? ` • ${selectedStudent.class}` : ''}</p>
               </div>
-              <button onClick={() => setSelectedStudent(null)} className="p-2 rounded-lg hover:bg-glass-light">
-                <X size={18} className="text-gray-300" />
-              </button>
+              <div className="flex items-center gap-2">
+                {canManageStudents && (
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={handleDeleteStudent}
+                    className="btn-danger"
+                  >
+                    {deleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                )}
+                <button onClick={() => setSelectedStudent(null)} className="p-2 rounded-lg hover:bg-glass-light">
+                  <X size={18} className="text-gray-300" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

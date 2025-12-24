@@ -233,9 +233,9 @@ router.post('/', requireAuth, requireRole('hod'), upload.fields([
 });
 
 /**
- * DELETE /api/students/:student_id - Delete student (HOD only)
+ * DELETE /api/students/:student_id - Delete student (HOD/Admin)
  */
-router.delete('/:student_id', requireAuth, requireRole('hod'), async (req, res) => {
+router.delete('/:student_id', requireAuth, requireRole('hod', 'admin'), async (req, res) => {
   try {
     const { student_id } = req.params;
     

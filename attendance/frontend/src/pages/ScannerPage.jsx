@@ -107,7 +107,7 @@ export default function ScannerPage() {
         confidence: Number(confidence || 0),
         timestamp: new Date().toLocaleTimeString(),
       })
-      toast.success('Face recognized')
+      toast.success('Attendance marked')
     } catch (error) {
       console.error('Error capturing frame:', error)
       toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Recognition failed')
