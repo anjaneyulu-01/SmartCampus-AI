@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { initDb } from './src/database/db.js';
 import { loadKnownFaces } from './src/services/faceRecognition.js';
@@ -33,7 +34,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve frontend static files
-const frontendPath = path.join(__dirname, '..', 'frontend');
+const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+const frontendPath = fs.existsSync(frontendDistPath) ? frontendDistPath : path.join(__dirname, '..', 'frontend');
 app.use(express.static(frontendPath));
 
 // Serve static assets
@@ -61,6 +63,20 @@ app.use('/api', attendanceRoutes); // Also mount for /api/checkin, /api/simulate
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/trust', trustRoutes);
 app.use('/api', insightRoutes);
+
+// SPA fallback (client-side routes like /scan)
+app.get('*', (req, res, next) => {
+  // Don't interfere with API or static assets.
+  if (req.path.startsWith('/api') || req.path.startsWith('/avatars') || req.path.startsWith('/static')) {
+    return next();
+  }
+  // Only serve the SPA for browser navigations.
+  const accept = req.headers.accept || '';
+  if (!accept.includes('text/html')) {
+    return next();
+  }
+  return res.sendFile(path.join(frontendPath, 'index.html'));
+});
 
 // 404 handler
 app.use((req, res) => {

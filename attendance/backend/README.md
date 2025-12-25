@@ -24,6 +24,10 @@ npm install
 ```
 
 3. **Configure database** - Create `.env` file:
+
+- Copy `.env.example` → `.env` and fill in `DB_PASSWORD`.
+- On Windows you can also run `start.bat` to prompt for your MySQL password and generate `.env`.
+
 ```env
 DB_HOST=localhost
 DB_PORT=3306

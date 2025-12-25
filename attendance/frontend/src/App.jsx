@@ -6,7 +6,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
 import DashboardPage from './pages/DashboardPage'
 import HODDashboardPage from './pages/HODDashboardPage'
-import FaceScanPage from './pages/FaceScanPage'
+import ScanDevicePage from './pages/ScanDevicePage'
 import FacultyPage from './pages/FacultyPage'
 import WorkersPage from './pages/WorkersPage'
 import LibraryPage from './pages/LibraryPage'
@@ -44,8 +44,9 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/face-scan" element={<FaceScanPage />} />
-          <Route path="/scanner" element={<Navigate to="/face-scan" replace />} />
+          <Route path="/scan" element={<ScanDevicePage />} />
+          <Route path="/face-scan" element={<Navigate to="/scan" replace />} />
+          <Route path="/scanner" element={<Navigate to="/scan" replace />} />
           <Route
             path="/"
             element={

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores'
 import toast from 'react-hot-toast'
-import { Lock, Mail, Loader } from 'lucide-react'
+import { Lock, Mail, Loader, ScanFace } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 export default function LoginPage() {
@@ -11,6 +11,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const loading = useAuthStore((state) => state.loading)
   const login = useAuthStore((state) => state.login)
+
+  const openScanDevice = () => {
+    // Standalone biometric device route (no login required).
+    window.open('/scan', '_blank', 'noopener,noreferrer')
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -133,6 +138,19 @@ export default function LoginPage() {
               ) : (
                 'Sign In'
               )}
+            </motion.button>
+
+            {/* Face Scan (Standalone Device) */}
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.55 }}
+              type="button"
+              onClick={openScanDevice}
+              className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-glass-light text-gray-200 hover:text-white hover:bg-glass-light transition-all duration-300 font-medium"
+            >
+              <ScanFace size={18} />
+              Open Face Scan
             </motion.button>
           </form>
 

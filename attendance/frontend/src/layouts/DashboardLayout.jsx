@@ -1,5 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores'
+import { useAttendanceStore } from '../stores'
 import {
   LayoutDashboard,
   Users,
@@ -13,7 +14,7 @@ import {
   Menu,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '../utils'
 
 const NAV_ITEMS = [
@@ -33,6 +34,138 @@ export default function DashboardLayout() {
   const logout = useAuthStore((state) => state.logout)
   const user = useAuthStore((state) => state.user)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Keep portal data fresh: listen for backend presence events and refresh stores.
+  const wsRef = useRef(null)
+  const wsReconnectTimerRef = useRef(0)
+  const wsDebouncedRefreshTimerRef = useRef(0)
+  const wsPingTimerRef = useRef(0)
+  const bcRef = useRef(null)
+  const lastEventKeyRef = useRef('')
+
+  const handlePresencePayload = (payload) => {
+    if (!payload?.student_id) return
+    const key = `${payload.student_id}|${payload.timestamp || ''}|${payload.status || ''}`
+    if (key && key === lastEventKeyRef.current) return
+    lastEventKeyRef.current = key
+
+    console.log('[Portal] Applying presence update:', payload.student_id, payload.status)
+    window.dispatchEvent(new CustomEvent('presence_event', { detail: payload }))
+    useAttendanceStore.getState().applyPresenceEvent(payload)
+
+    if (wsDebouncedRefreshTimerRef.current) {
+      window.clearTimeout(wsDebouncedRefreshTimerRef.current)
+    }
+    wsDebouncedRefreshTimerRef.current = window.setTimeout(() => {
+      useAttendanceStore.getState().refreshStats()
+      useAttendanceStore.getState().refreshAttendance()
+    }, 900)
+  }
+
+  useEffect(() => {
+    let closed = false
+
+    const connect = () => {
+      try {
+        if (closed) return
+        if (wsRef.current && (wsRef.current.readyState === 0 || wsRef.current.readyState === 1)) return
+
+        const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+
+        // In dev, connect directly to the backend WS to avoid proxy flakiness.
+        // In prod (served by backend), same-origin works.
+        const wsUrl = import.meta?.env?.DEV
+          ? `${proto}://${window.location.hostname}:8000/ws/events`
+          : `${proto}://${window.location.host}/ws/events`
+
+        const ws = new WebSocket(wsUrl)
+        wsRef.current = ws
+
+        ws.onopen = () => {
+          console.log('[Portal WS] Connected to', wsUrl)
+          if (wsPingTimerRef.current) window.clearInterval(wsPingTimerRef.current)
+          wsPingTimerRef.current = window.setInterval(() => {
+            try {
+              if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ping' }))
+            } catch {
+              // ignore
+            }
+          }, 20000)
+        }
+
+        ws.onmessage = (evt) => {
+          try {
+            const data = JSON.parse(evt.data)
+            if (data?.type === 'presence' && data?.payload) {
+              console.log('[Portal WS] Received presence:', data.payload)
+              handlePresencePayload(data.payload)
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        ws.onclose = () => {
+          if (closed) return
+          if (wsPingTimerRef.current) {
+            window.clearInterval(wsPingTimerRef.current)
+            wsPingTimerRef.current = 0
+          }
+          // Reconnect quickly.
+          wsReconnectTimerRef.current = window.setTimeout(connect, 800)
+        }
+
+        ws.onerror = () => {
+          try {
+            ws.close()
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        wsReconnectTimerRef.current = window.setTimeout(connect, 1000)
+      }
+    }
+
+    connect()
+    return () => {
+      closed = true
+      if (wsReconnectTimerRef.current) window.clearTimeout(wsReconnectTimerRef.current)
+      if (wsDebouncedRefreshTimerRef.current) window.clearTimeout(wsDebouncedRefreshTimerRef.current)
+      if (wsPingTimerRef.current) window.clearInterval(wsPingTimerRef.current)
+      try {
+        wsRef.current?.close()
+      } catch {
+        // ignore
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    // Fastest cross-tab update when portal + scan are on the same origin (5173):
+    // Scan tab broadcasts presence via BroadcastChannel.
+    try {
+      const bc = new BroadcastChannel('presenceai_presence')
+      bcRef.current = bc
+      bc.onmessage = (ev) => {
+        const msg = ev?.data
+        console.log('[Portal BC] Received from BroadcastChannel:', msg?.payload)
+        if (msg?.type === 'presence' && msg?.payload) {
+          handlePresencePayload(msg.payload)
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      try {
+        bcRef.current?.close();
+      } catch {
+        // ignore
+      }
+    }
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -99,12 +232,15 @@ export default function DashboardLayout() {
           <h1 className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
             PresenceAI
           </h1>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 hover:bg-glass-light rounded-lg transition-all"
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 hover:bg-glass-light rounded-lg transition-all"
+              aria-label="Open menu"
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         </header>
 
         {/* Mobile Menu */}

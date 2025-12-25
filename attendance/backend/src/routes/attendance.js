@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import { dbAll, dbGet, dbRun } from '../database/db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { processFramesConsensus } from '../services/faceRecognition.js';
+import { recognizeWithPython } from '../services/faceRecognition.js';
 import { getAvatarUrlForStudent } from '../utils/helpers.js';
 import { broadcastPresence } from '../websocket/websocket.js';
 
@@ -12,6 +12,135 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB per file
+});
+
+// Legacy-compatible multi-frame recognition helper.
+// The old webscan.html posts multiple frames and expects the backend to decide a match.
+// We delegate this to the Python face service which can evaluate multiple frames.
+async function processFramesConsensus(frames, _minAgree = 2, _distanceThreshold = 0.48) {
+  const result = await recognizeWithPython(frames);
+  // normalize minimal shape expected by existing checkin route
+  if (result && result.status === 'success') {
+    return {
+      status: 'success',
+      student_id: result.student_id,
+      confidence: Number(result.confidence || 0),
+      is_suspicious: Boolean(result.is_suspicious || false),
+    };
+  }
+  return result;
+}
+
+/**
+ * POST /api/attendance/scan - Biometric device scan
+ * - No auth (device-like behavior)
+ * - Accepts multipart/form-data (file) or base64 (image)
+ * - Uses face recognition pipeline and marks attendance (once per student per day)
+ *
+ * Response:
+ *  - studentId
+ *  - name
+ *  - subject
+ *  - timestamp
+ *  - status: success | not recognized
+ */
+router.post('/scan', upload.single('file'), async (req, res) => {
+  try {
+    const subject = (req.body?.subject || 'Biometric Scan').toString().trim() || 'Biometric Scan';
+
+    // Collect one or more frames.
+    const frames = [];
+    if (req.file?.buffer) {
+      frames.push(req.file.buffer);
+    }
+
+    // JSON mode: { images: [base64, ...] }
+    if (Array.isArray(req.body?.images)) {
+      for (const item of req.body.images) {
+        if (!item) continue;
+        const raw = String(item);
+        const b64 = raw.includes('base64,') ? raw.split('base64,')[1] : raw;
+        try {
+          frames.push(Buffer.from(b64, 'base64'));
+        } catch {
+          // ignore bad frame
+        }
+      }
+    } else if (req.body?.image) {
+      // Single base64 with or without data URL prefix
+      const raw = req.body.image.toString();
+      const b64 = raw.includes('base64,') ? raw.split('base64,')[1] : raw;
+      frames.push(Buffer.from(b64, 'base64'));
+    }
+
+    if (frames.length === 0) {
+      return res.status(400).json({ error: 'image required (file, image base64, or images[] base64)' });
+    }
+
+    // Biometric device uses the Python face service for matching.
+    // (Keeps recognition consistent and avoids optional Node face deps.)
+    const result = await recognizeWithPython(frames);
+    const nowIso = new Date().toISOString();
+
+    if (result.status !== 'success' || !result.student_id) {
+      const msg = String(result?.message || '').toLowerCase();
+      const status = msg.includes('no faces detected') || msg.includes('no face') ? 'no_face' : 'not recognized';
+      return res.json({
+        studentId: null,
+        name: null,
+        subject,
+        timestamp: nowIso,
+        status
+      });
+    }
+
+    const studentId = result.student_id;
+    const student = await dbGet('SELECT id, name FROM students WHERE id = ?', [studentId]);
+    const name = student?.name || studentId;
+
+    // Prevent duplicate attendance for the same student on the same day.
+    const already = await dbGet(
+      `
+        SELECT id
+        FROM attendance_events
+        WHERE student_id = ?
+          AND DATE(ts) = CURDATE()
+          AND type IN ('present', 'checkin')
+        ORDER BY ts DESC
+        LIMIT 1
+      `,
+      [studentId]
+    );
+
+    if (!already) {
+      await dbRun(
+        'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label, subject, confidence_score) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [studentId, studentId, 'student', 'present', 'Biometric scan', subject, Number(result.confidence || 0)]
+      );
+    }
+
+    const avatarUrl = await getAvatarUrlForStudent(studentId);
+    broadcastPresence({
+      student_id: studentId,
+      name: name,
+      class: student?.class || '',
+      status: 'Present',
+      timestamp: nowIso,
+      confidence: Number(result.confidence || 0),
+      avatarUrl
+    });
+
+    return res.json({
+      studentId,
+      name,
+      subject,
+      timestamp: nowIso,
+      status: 'success'
+    });
+  } catch (error) {
+    console.error('[ERROR] Attendance scan:', error);
+    res.status(500).json({ error: 'Scan failed' });
+  }
 });
 
 /**
@@ -128,9 +257,12 @@ router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res
     }
     
     // Broadcast presence
+    const student = await dbGet('SELECT id, name, class FROM students WHERE id = ?', [student_id]);
     const avatarUrl = await getAvatarUrlForStudent(student_id);
     broadcastPresence({
       student_id,
+      name: student?.name || student_id,
+      class: student?.class || '',
       status: normalized,
       timestamp: new Date().toISOString(),
       avatarUrl
@@ -167,10 +299,27 @@ router.get('/', async (req, res) => {
     // Get students filtered by class if requested
     let students;
     if (class_name && class_name.toLowerCase() !== 'all') {
-      students = await dbAll(
-        'SELECT id, name, avatar_url, class FROM students WHERE class = ?',
-        [class_name]
-      );
+      // Support both full class codes (e.g., "CSE-A") and legacy single-letter sections (e.g., "A").
+      const rawClass = String(class_name);
+      let section = null;
+      if (rawClass.includes('-')) {
+        const last = rawClass.split('-').pop();
+        if (last && last.length <= 2) {
+          section = last;
+        }
+      }
+
+      if (section) {
+        students = await dbAll(
+          'SELECT id, name, avatar_url, class FROM students WHERE class = ? OR class = ?',
+          [rawClass, section]
+        );
+      } else {
+        students = await dbAll(
+          'SELECT id, name, avatar_url, class FROM students WHERE class = ?',
+          [rawClass]
+        );
+      }
     } else {
       students = await dbAll('SELECT id, name, avatar_url, class FROM students');
     }
@@ -261,13 +410,63 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
     if (result.status !== 'success') {
       return res.status(400).json({ 
         success: false, 
-        message: result.message || 'No match' 
+        message: result.message || 'No match',
+        debug: {
+          // When using Python, this may include best_distance/tolerance.
+          ...(typeof result === 'object' ? result : {})
+        }
       });
     }
     
     const student_id = result.student_id;
     const is_suspicious = result.is_suspicious || false;
     const confidence = result.confidence || 0;
+
+    if (!student_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Recognition returned empty student_id',
+        debug: result
+      });
+    }
+
+    // Ensure the matched student exists; otherwise DB inserts may fail via FK.
+    const student = await dbGet('SELECT id, name FROM students WHERE id = ? LIMIT 1', [student_id]);
+    if (!student) {
+      return res.status(400).json({
+        success: false,
+        message: `Unknown student_id: ${student_id}. Ensure known_faces filename matches an existing student id.`,
+        debug: result
+      });
+    }
+
+    // Prevent duplicate attendance for the same student on the same day.
+    const already = await dbGet(
+      `
+        SELECT id
+        FROM attendance_events
+        WHERE student_id = ?
+          AND DATE(ts) = CURDATE()
+          AND type IN ('present', 'checkin')
+        ORDER BY ts DESC
+        LIMIT 1
+      `,
+      [student_id]
+    );
+
+    if (already) {
+      const avatarUrl = await getAvatarUrlForStudent(student_id);
+      return res.json({
+        success: true,
+        student_id,
+        student_name: student?.name || student_id,
+        avatarUrl,
+        status: 'Present',
+        confidence,
+        message: 'already recorded',
+        timestamp: new Date().toISOString(),
+      });
+    }
     
     try {
       if (is_suspicious) {
@@ -295,28 +494,45 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
       }
     } catch (dbError) {
       console.error('[ERROR] Database error during checkin:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Database error during checkin',
+        detail: dbError?.message || String(dbError),
+      });
     }
     
     const avatarUrl = await getAvatarUrlForStudent(student_id);
     const statusLabel = is_suspicious ? 'Suspicious' : 'Present';
+    const nowIso = new Date().toISOString();
     
-    broadcastPresence({
-      student_id,
-      status: statusLabel,
-      timestamp: new Date().toISOString(),
-      confidence,
-      avatarUrl
-    });
+    try {
+      broadcastPresence({
+        student_id,
+        status: statusLabel,
+        timestamp: nowIso,
+        confidence,
+        avatarUrl
+      });
+    } catch (wsError) {
+      console.warn('[WARN] broadcastPresence failed:', wsError);
+    }
     
     res.json({
       success: true,
       student_id,
+      student_name: student?.name || student_id,
+      avatarUrl,
       status: statusLabel,
-      confidence
+      confidence,
+      timestamp: nowIso,
     });
   } catch (error) {
     console.error('[ERROR] Checkin:', error);
-    res.status(500).json({ error: 'Checkin failed' });
+    res.status(500).json({
+      success: false,
+      message: 'Checkin failed',
+      detail: error?.message || String(error)
+    });
   }
 });
 

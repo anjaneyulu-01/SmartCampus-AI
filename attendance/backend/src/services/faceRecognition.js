@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import http from 'http';
+import https from 'https';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,25 +21,104 @@ let modelsLoaded = false;
 let knownEncodings = [];
 let knownNames = [];
 
+async function postJsonDetailed(urlStr, bodyObj) {
+  const payload = JSON.stringify(bodyObj ?? {});
+
+  // Prefer native fetch when available.
+  if (typeof fetch === 'function') {
+    const res = await fetch(urlStr, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    const raw = await res.text();
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    let data = raw;
+    if (ct.includes('application/json')) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = raw;
+      }
+    }
+    return { ok: res.ok, status: res.status, data, raw };
+  }
+
+  // Fallback for older Node versions without global fetch.
+  const url = new URL(urlStr);
+  const lib = url.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const req = lib.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: `${url.pathname}${url.search}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => (raw += chunk));
+        res.on('end', () => {
+          const ok = res.statusCode >= 200 && res.statusCode < 300;
+          let data = raw;
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            data = raw;
+          }
+          resolve({ ok, status: res.statusCode || 0, data, raw });
+        });
+      }
+    );
+
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 async function callPythonRecognition(framesBytes) {
   try {
     const images = framesBytes.map((b) => b.toString('base64'));
-    const res = await fetch(PY_FACE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ images })
-    });
+    const resp = await postJsonDetailed(PY_FACE_URL, { images });
 
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`Python service HTTP ${res.status}: ${txt}`);
+    // Python returns structured JSON even on non-2xx; preserve it.
+    if (resp && typeof resp.data === 'object' && resp.data) {
+      return resp.data;
     }
 
-    const json = await res.json();
-    return json;
+    if (!resp.ok) {
+      return { status: 'error', message: `python http ${resp.status}`, raw: resp.raw };
+    }
+
+    return resp.data;
   } catch (err) {
     console.error('[ERROR] Python face service:', err);
     return { status: 'error', message: err.message || 'python service failed' };
+  }
+}
+
+// Explicit Python recognition (used by the standalone biometric scan endpoint).
+export async function recognizeWithPython(framesBytes) {
+  return callPythonRecognition(framesBytes);
+}
+
+// Ask the Python service to reload encodings from DB (and bootstrap from known_faces if needed).
+export async function reloadPythonFaces() {
+  try {
+    const base = new URL(PY_FACE_URL);
+    base.pathname = '/reload';
+    base.search = '';
+    return await postJson(base.toString(), {});
+  } catch (err) {
+    console.error('[WARN] Python face reload failed:', err);
+    return { status: 'error', message: err?.message || 'reload failed' };
   }
 }
 

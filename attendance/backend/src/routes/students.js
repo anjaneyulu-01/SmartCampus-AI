@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { dbAll, dbGet, dbRun } from '../database/db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { loadKnownFaces } from '../services/faceRecognition.js';
+import { loadKnownFaces, reloadPythonFaces } from '../services/faceRecognition.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -219,6 +219,9 @@ router.post('/', requireAuth, requireRole('hod'), upload.fields([
     // Reload known faces if face image was uploaded
     if (faceFile) {
       await loadKnownFaces();
+      // Keep the Python recognition DB in sync with face uploads.
+      // This makes the standalone /scan device recognize newly enrolled faces without restarting Python.
+      await reloadPythonFaces();
     }
     
     res.json({ 

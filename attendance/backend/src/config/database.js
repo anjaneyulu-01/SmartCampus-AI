@@ -1,5 +1,15 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+// Always load the backend-local .env (attendance/backend/.env) regardless of where
+// the server is started from.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const envPath = path.join(__dirname, '..', '..', '.env');
+
+dotenv.config({ path: envPath });
+// Also load from process.cwd() as a fallback (does not override existing vars).
 dotenv.config();
 
 export const dbConfig = {

@@ -62,9 +62,13 @@ export const useAttendanceStore = create((set, get) => ({
   stats: null,
   loading: false,
 
+  // Remember last query so we can auto-refresh on WebSocket events.
+  lastAttendanceQuery: { classId: 'all', date: null },
+
   fetchAttendance: async (classId, date) => {
     set({ loading: true })
     try {
+      set({ lastAttendanceQuery: { classId, date } })
       const response = await axiosInstance.get('/attendance', {
         params: { class: classId, date },
       })
@@ -73,6 +77,80 @@ export const useAttendanceStore = create((set, get) => ({
       console.error('Failed to fetch attendance:', err)
       set({ loading: false })
     }
+  },
+
+  refreshAttendance: async () => {
+    const q = get().lastAttendanceQuery
+    const today = new Date().toISOString().slice(0, 10)
+    const date = q?.date || today
+    const classId = q?.classId || 'all'
+    return get().fetchAttendance(classId, date)
+  },
+
+  refreshStats: async () => {
+    return get().fetchStats()
+  },
+
+  applyPresenceEvent: (payload) => {
+    if (!payload || !payload.student_id) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const eventDate = String(payload.timestamp || '').slice(0, 10) || today
+    const viewingDate = get().lastAttendanceQuery?.date || today
+    if (eventDate !== viewingDate) return
+
+    const nextStatus = String(payload.status || 'present').toLowerCase()
+
+    set((state) => {
+      const attendance = Array.isArray(state.attendance) ? [...state.attendance] : []
+      const idx = attendance.findIndex((r) => r?.student_id === payload.student_id)
+
+      let prevStatus = null
+      if (idx >= 0) {
+        // Update existing record
+        prevStatus = String(attendance[idx]?.status || '').toLowerCase()
+        attendance[idx] = {
+          ...attendance[idx],
+          status: nextStatus,
+          timestamp: payload.timestamp || attendance[idx]?.timestamp || new Date().toISOString(),
+          avatarUrl: payload.avatarUrl || attendance[idx]?.avatarUrl,
+        }
+      } else {
+        // Add new record if student not in list yet
+        prevStatus = 'absent'
+        attendance.push({
+          student_id: payload.student_id,
+          name: payload.name || payload.student_id,
+          class: payload.class || '',
+          status: nextStatus,
+          timestamp: payload.timestamp || new Date().toISOString(),
+          avatarUrl: payload.avatarUrl || '/avatars/default.jpg',
+        })
+      }
+
+      // Optimistically adjust stats if present.
+      let stats = state.stats
+      if (stats && typeof stats === 'object') {
+        const total = Number(stats.total_students || 0)
+        const isPresentPrev = prevStatus === 'present' || prevStatus === 'checkin'
+        const isPresentNext = nextStatus === 'present' || nextStatus === 'checkin'
+
+        if (isPresentPrev !== isPresentNext) {
+          const present = Math.max(0, Number(stats.present_today || 0) + (isPresentNext ? 1 : -1))
+          const absent = Math.max(0, total - present)
+          const attendance_rate = total > 0 ? Math.round((present / total) * 1000) / 10 : 0
+          stats = {
+            ...stats,
+            present_today: present,
+            absent_today: absent,
+            attendance_rate,
+            avg_punctuality: attendance_rate,
+          }
+        }
+      }
+
+      return { attendance, stats }
+    })
   },
 
   fetchStudents: async (classId) => {

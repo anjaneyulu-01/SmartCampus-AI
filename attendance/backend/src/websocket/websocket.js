@@ -75,6 +75,8 @@ export function broadcastPresence(payload) {
     payload
   });
   
+  console.log('[WS] Broadcasting presence:', payload.student_id, payload.status, 'to', clients.size, 'clients');
+  
   clients.forEach(client => {
     if (client.readyState === 1) { // WebSocket.OPEN
       try {

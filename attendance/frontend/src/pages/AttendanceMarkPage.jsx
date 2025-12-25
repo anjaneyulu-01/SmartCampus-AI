@@ -48,6 +48,54 @@ export default function AttendanceMarkPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deptId, cls, date])
 
+  useEffect(() => {
+    // Refresh quickly when a scan is broadcast.
+    // Only auto-refresh for today's view to avoid unexpected changes on historical dates.
+    const today = new Date().toISOString().slice(0, 10)
+    if (date !== today) return
+
+    let refetchTimer = 0
+    const onPresence = (ev) => {
+      const p = ev?.detail
+      if (!p?.student_id) return
+
+      const eventDate = String(p.timestamp || '').slice(0, 10)
+      if (eventDate && eventDate !== today) return
+
+      // Instant UI update: patch the row locally if it exists.
+      let touched = false
+      setRecords((prev) => {
+        const next = (prev || []).map((r) => {
+          if (r?.student_id !== p.student_id) return r
+          touched = true
+          return {
+            ...r,
+            status: String(p.status || 'present').toLowerCase(),
+            timestamp: p.timestamp || r.timestamp || new Date().toISOString(),
+            avatarUrl: p.avatarUrl || r.avatarUrl,
+          }
+        })
+        return next
+      })
+
+      // Fallback consistency: debounced refetch (only once for bursts).
+      // If we didn't find the student in current records (e.g., class filter mismatch), a refetch will pull it.
+      if (refetchTimer) window.clearTimeout(refetchTimer)
+      refetchTimer = window.setTimeout(() => {
+        if (!touched) {
+          load()
+        }
+      }, 1200)
+    }
+
+    window.addEventListener('presence_event', onPresence)
+    return () => {
+      window.removeEventListener('presence_event', onPresence)
+      if (refetchTimer) window.clearTimeout(refetchTimer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date])
+
   const mark = async (studentId, status) => {
     try {
       setMarking(studentId)

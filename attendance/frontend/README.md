@@ -17,7 +17,6 @@ Modern, responsive frontend for the PresenceAI Face Recognition Attendance Syste
 ```
 frontend/
 ├── index.html          # Main dashboard page
-├── login.html          # Login page
 ├── webscan.html        # Face recognition scan page
 ├── main.css            # Main stylesheet
 ├── app.js              # Frontend JavaScript logic
@@ -72,17 +71,13 @@ const WS_URL = 'ws://localhost:8000/ws/events';
 
 ## Pages
 
-### 1. Login (`login.html`)
-- User authentication
-- Role-based access (HOD, Teacher, Parent)
-
-### 2. Dashboard (`index.html`)
+### 1. Dashboard (`index.html`)
 - Main attendance dashboard
 - Student list with status
 - Statistics and analytics
 - Real-time updates
 
-### 3. Face Scan (`webscan.html`)
+### 2. Face Scan (`webscan.html`)
 - Camera-based face recognition
 - Multi-frame capture
 - Real-time recognition feedback

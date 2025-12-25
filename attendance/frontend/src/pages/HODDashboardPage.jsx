@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Users, GraduationCap, Briefcase, BookOpenText, Building2 } from 'lucide-react';
 import { useAuthStore } from '../stores';
@@ -20,9 +20,57 @@ const HODDashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
+  const refreshTimerRef = useRef(0);
+
+  const todaySummaryCount = useMemo(() => {
+    if (!Array.isArray(attendance) || attendance.length === 0) return 0;
+    // Backend returns dates ASC; last item is the most recent (today when present).
+    const last = attendance[attendance.length - 1];
+    return Number(last?.count || 0);
+  }, [attendance]);
+
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  const refreshAttendanceBits = async () => {
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+
+      if (user?.department_id) {
+        const deptRes = await axios.get(`/api/departments/${user.department_id}/stats`, { headers });
+        setStats(deptRes.data);
+      }
+
+      const attendanceRes = await axios.get('/api/attendance/summary?days=7', { headers });
+      setAttendance(attendanceRes.data || []);
+    } catch (error) {
+      console.error('Failed to refresh attendance bits:', error);
+    }
+  };
+
+  useEffect(() => {
+    const onPresence = (ev) => {
+      const p = ev?.detail;
+      if (!p?.timestamp) return;
+
+      // Only refresh for today's events.
+      const today = new Date().toISOString().slice(0, 10);
+      const eventDate = String(p.timestamp).slice(0, 10);
+      if (eventDate !== today) return;
+
+      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = window.setTimeout(() => {
+        refreshAttendanceBits();
+      }, 600);
+    };
+
+    window.addEventListener('presence_event', onPresence);
+    return () => {
+      window.removeEventListener('presence_event', onPresence);
+      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
+    };
+  }, [token, user?.department_id]);
 
   const fetchDashboardData = async () => {
     try {
@@ -99,7 +147,7 @@ const HODDashboardPage = () => {
           <StatCard icon={Users} label="Faculty" value={stats?.total_faculty ?? faculty.length} color="bg-blue-500" />
           <StatCard icon={Briefcase} label="Staff" value={stats?.total_workers ?? workers.length} color="bg-emerald-500" />
           <StatCard icon={GraduationCap} label="Students" value={stats?.total_students ?? students.length} color="bg-purple-500" />
-          <StatCard icon={BookOpenText} label="Classes" value={stats?.active_classes ?? stats?.total_classes ?? 0} subtitle={`${attendance?.[0]?.count || 0} today`} color="bg-orange-500" />
+          <StatCard icon={BookOpenText} label="Classes" value={stats?.active_classes ?? stats?.total_classes ?? 0} subtitle={`${todaySummaryCount} today`} color="bg-orange-500" />
         </motion.div>
 
         {/* Tab Navigation */}

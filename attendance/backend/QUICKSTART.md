@@ -17,7 +17,10 @@
 cd backend
 ```
 
-3. **Configure database** - Create `.env` file:
+3. **Configure database**
+
+- Copy `.env.example` → `.env` and set `DB_PASSWORD`.
+
 ```env
 DB_HOST=localhost
 DB_PORT=3306

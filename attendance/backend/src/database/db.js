@@ -158,6 +158,7 @@ export async function initDb() {
         subject VARCHAR(255),
         room VARCHAR(255),
         note TEXT,
+        confidence_score FLOAT,
         FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE,
         INDEX idx_student_id (student_id),
         INDEX idx_entity (entity_id, entity_type),
@@ -208,6 +209,17 @@ export async function initDb() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // Store face encodings per student (JSON array of floats).
+    // This is used by the standalone biometric scan pipeline.
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS student_face_encodings (
+        student_id VARCHAR(255) PRIMARY KEY,
+        encoding_json MEDIUMTEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // Ensure schema upgrades on existing tables (ignore duplicates gracefully)
     const safeAlter = async (sql) => {
       try {
@@ -228,9 +240,13 @@ export async function initDb() {
     await safeAlter(`ALTER TABLE attendance_events ADD COLUMN entity_id VARCHAR(255)`);
     await safeAlter(`ALTER TABLE attendance_events ADD COLUMN entity_type ENUM('student','faculty','worker') DEFAULT 'student'`);
     await safeAlter(`ALTER TABLE attendance_events ADD INDEX idx_entity (entity_id, entity_type)`);
+    await safeAlter(`ALTER TABLE attendance_events ADD COLUMN confidence_score FLOAT NULL`);
     await safeAlter(`ALTER TABLE users ADD COLUMN department_id INT NULL`);
     await safeAlter(`ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE`);
     await safeAlter(`ALTER TABLE users ADD INDEX idx_department_id (department_id)`);
+
+    // For older databases: ensure the face encodings table exists.
+    // (CREATE TABLE IF NOT EXISTS above handles fresh installs.)
 
     // Seed branches (departments), classes, faculty, workers, and demo students
     const branches = [
