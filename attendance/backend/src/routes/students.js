@@ -84,25 +84,24 @@ router.get('/', requireAuth, async (req, res) => {
     let query = `
       SELECT s.id, s.name, s.avatar_url, s.seat_row, s.seat_col,
              ts.score as trust_score,
-             CASE
-               WHEN ae.ts IS NOT NULL AND ae.ts > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN
-                 CASE WHEN ae.type = 'suspicious' THEN 'suspicious' ELSE 'present' END
-               WHEN ae.ts IS NOT NULL AND ae.ts > DATE_SUB(NOW(), INTERVAL 30 MINUTE) THEN 'late'
-               ELSE 'absent'
-             END as status,
+             COALESCE(ae.status, 'absent') as status,
              ae.ts as last_checkin,
              s.mobile, s.class
       FROM students s
       LEFT JOIN trust_scores ts ON s.id = ts.student_id
       LEFT JOIN (
-        SELECT student_id, MAX(ts) as ts,
-               SUBSTRING_INDEX(GROUP_CONCAT(type ORDER BY ts DESC), ',', 1) as type
+        SELECT student_id,
+               MAX(ts) as ts,
+               CASE
+                 WHEN SUM(CASE WHEN type IN ('present','checkin') THEN 1 ELSE 0 END) > 0 THEN 'present'
+                 WHEN SUM(CASE WHEN type = 'suspicious' THEN 1 ELSE 0 END) > 0 THEN 'suspicious'
+                 ELSE 'absent'
+               END as status
         FROM attendance_events
         WHERE DATE(ts) = CURDATE()
         GROUP BY student_id
       ) ae ON s.id = ae.student_id
     `;
-
     if (classFilter && String(classFilter).toLowerCase() !== 'all') {
       query += ' WHERE s.class = ?';
       params.push(classFilter);

@@ -179,7 +179,8 @@ export default function ScanDevicePage() {
 
       if (result?.success) {
         const displayName = result?.student_name || result?.name || result?.student_id || 'Student'
-        const status = result?.status || 'Present'
+        const isAlreadyMarked = result?.message?.toLowerCase().includes('already recorded')
+        const status = isAlreadyMarked ? 'Already Marked' : (result?.status || 'Present')
 
         // Instant cross-tab update (portal + scan on same origin).
         try {
@@ -188,7 +189,7 @@ export default function ScanDevicePage() {
               type: 'presence',
               payload: {
                 student_id: result.student_id,
-                status,
+                status: result?.status || 'Present',
                 timestamp: result?.timestamp || new Date().toISOString(),
                 avatarUrl: result?.avatarUrl,
               },
@@ -221,14 +222,15 @@ export default function ScanDevicePage() {
             const retry = await sendToBackend([blob])
             if (retry?.success) {
               const displayName = retry?.student_name || retry?.name || retry?.student_id || 'Student'
-              const status = retry?.status || 'Present'
+              const isAlreadyMarked = retry?.message?.toLowerCase().includes('already recorded')
+              const status = isAlreadyMarked ? 'Already Marked' : (retry?.status || 'Present')
               try {
                 if (retry?.student_id) {
                   bcRef.current?.postMessage({
                     type: 'presence',
                     payload: {
                       student_id: retry.student_id,
-                      status,
+                      status: retry?.status || 'Present',
                       timestamp: retry?.timestamp || new Date().toISOString(),
                       avatarUrl: retry?.avatarUrl,
                     },

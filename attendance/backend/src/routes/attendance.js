@@ -98,26 +98,29 @@ router.post('/scan', upload.single('file'), async (req, res) => {
     const student = await dbGet('SELECT id, name FROM students WHERE id = ?', [studentId]);
     const name = student?.name || studentId;
 
-    // Prevent duplicate attendance for the same student on the same day.
-    const already = await dbGet(
-      `
-        SELECT id
-        FROM attendance_events
-        WHERE student_id = ?
-          AND DATE(ts) = CURDATE()
-          AND type IN ('present', 'checkin')
-        ORDER BY ts DESC
-        LIMIT 1
-      `,
+    // If already present today, keep the original record and just acknowledge.
+    const existing = await dbGet(
+      `SELECT id, ts FROM attendance_events WHERE student_id = ? AND DATE(ts) = CURDATE() AND type IN ('present','checkin') ORDER BY ts DESC LIMIT 1`,
       [studentId]
     );
 
-    if (!already) {
-      await dbRun(
-        'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label, subject, confidence_score) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [studentId, studentId, 'student', 'present', 'Biometric scan', subject, Number(result.confidence || 0)]
-      );
+    if (existing?.id) {
+      const avatarUrl = await getAvatarUrlForStudent(studentId);
+      return res.json({
+        studentId,
+        name,
+        subject,
+        timestamp: existing.ts,
+        status: 'already_marked',
+        message: 'Already marked present today',
+        avatarUrl,
+      });
     }
+
+    await dbRun(
+      'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label, subject, confidence_score) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [studentId, studentId, 'student', 'present', 'Biometric scan', subject, Number(result.confidence || 0)]
+    );
 
     const avatarUrl = await getAvatarUrlForStudent(studentId);
     broadcastPresence({
@@ -231,13 +234,26 @@ router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res
     }
     
     const normalized = (status || 'present').toString().trim().toLowerCase();
-    const eventType = normalized === 'suspicious' ? 'suspicious' : normalized === 'absent' ? 'absent' : 'checkin';
+    const eventType = normalized === 'suspicious' ? 'suspicious' : normalized === 'absent' ? 'absent' : 'present';
     const label = `Marked: ${normalized}`;
-    
-    await dbRun(
-      'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
-      [student_id, student_id, 'student', eventType, label]
+
+    // Keep one definitive record per student per day so the UI stays present all day.
+    const existing = await dbGet(
+      `SELECT id FROM attendance_events WHERE student_id = ? AND DATE(ts) = CURDATE() ORDER BY ts DESC LIMIT 1`,
+      [student_id]
     );
+
+    if (existing?.id) {
+      await dbRun(
+        'UPDATE attendance_events SET type = ?, label = ?, ts = NOW() WHERE id = ?',
+        [eventType, label, existing.id]
+      );
+    } else {
+      await dbRun(
+        'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
+        [student_id, student_id, 'student', eventType, label]
+      );
+    }
     
     if (normalized === 'suspicious') {
       await dbRun(
@@ -339,42 +355,54 @@ router.get('/', async (req, res) => {
     
     if (studentIds.length > 0) {
       const placeholders = studentIds.map(() => '?').join(',');
+      // Get all records for the date, then pick best status per student in code (handles ties properly)
       const attendance = await dbAll(`
         SELECT ae.student_id, ae.type, ae.ts, ae.label
         FROM attendance_events ae
-        JOIN (
-          SELECT student_id, MAX(ts) as maxts 
-          FROM attendance_events
-          WHERE DATE(ts) = ?
-          GROUP BY student_id
-        ) s2 ON ae.student_id = s2.student_id AND ae.ts = s2.maxts
         WHERE ae.student_id IN (${placeholders})
-      `, [qdate, ...studentIds]);
+          AND DATE(ae.ts) = ?
+        ORDER BY ae.student_id, ae.ts DESC
+      `, [...studentIds, qdate]);
       
       const attByStudent = {};
       attendance.forEach(a => {
-        attByStudent[a.student_id] = {
+        const sid = a.student_id;
+        if (!attByStudent[sid]) {
+          attByStudent[sid] = [];
+        }
+        attByStudent[sid].push({
           type: a.type,
           ts: a.ts,
           label: a.label
-        };
+        });
       });
       
       for (const [sid, meta] of Object.entries(studentMap)) {
-        const att = attByStudent[sid];
+        const records_for_student = attByStudent[sid] || [];
         let status = 'absent';
         let timestamp = null;
         
-        if (att) {
-          const typ = att.type?.toLowerCase() || '';
-          if (typ === 'suspicious') {
-            status = 'suspicious';
-          } else if (typ === 'present' || typ === 'checkin') {
+        if (records_for_student.length > 0) {
+          // Prioritize: present > checkin > suspicious > absent
+          const hasPresent = records_for_student.find(r => r.type?.toLowerCase() === 'present');
+          const hasCheckin = records_for_student.find(r => r.type?.toLowerCase() === 'checkin');
+          const hasSuspicious = records_for_student.find(r => r.type?.toLowerCase() === 'suspicious');
+          
+          if (hasPresent) {
             status = 'present';
+            timestamp = hasPresent.ts;
+          } else if (hasCheckin) {
+            status = 'present';
+            timestamp = hasCheckin.ts;
+          } else if (hasSuspicious) {
+            status = 'suspicious';
+            timestamp = hasSuspicious.ts;
           } else {
-            status = typ || 'present';
+            // Use the latest record's type
+            const latest = records_for_student[0];
+            status = latest.type?.toLowerCase() || 'absent';
+            timestamp = latest.ts;
           }
-          timestamp = att.ts;
         }
         
         records.push({
@@ -440,34 +468,6 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
       });
     }
 
-    // Prevent duplicate attendance for the same student on the same day.
-    const already = await dbGet(
-      `
-        SELECT id
-        FROM attendance_events
-        WHERE student_id = ?
-          AND DATE(ts) = CURDATE()
-          AND type IN ('present', 'checkin')
-        ORDER BY ts DESC
-        LIMIT 1
-      `,
-      [student_id]
-    );
-
-    if (already) {
-      const avatarUrl = await getAvatarUrlForStudent(student_id);
-      return res.json({
-        success: true,
-        student_id,
-        student_name: student?.name || student_id,
-        avatarUrl,
-        status: 'Present',
-        confidence,
-        message: 'already recorded',
-        timestamp: new Date().toISOString(),
-      });
-    }
-    
     try {
       if (is_suspicious) {
         await dbRun(
@@ -479,14 +479,31 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
           [student_id]
         );
       } else {
-        await dbRun(
-          'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
-          [student_id, student_id, 'student', 'checkin', 'Camera checkin']
+        // If already marked present/checkin today, acknowledge without duplicating.
+        const existing = await dbGet(
+          `SELECT id, ts FROM attendance_events WHERE student_id = ? AND DATE(ts) = CURDATE() AND type IN ('present','checkin') ORDER BY ts DESC LIMIT 1`,
+          [student_id]
         );
+
+        if (existing?.id) {
+          const avatarUrl = await getAvatarUrlForStudent(student_id);
+          return res.json({
+            success: true,
+            student_id,
+            student_name: student?.name || student_id,
+            avatarUrl,
+            status: 'Present',
+            confidence,
+            message: 'already recorded',
+            timestamp: existing.ts,
+          });
+        }
+
         await dbRun(
           'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label) VALUES (?, ?, ?, ?, ?)',
           [student_id, student_id, 'student', 'present', 'Auto-marked present via face scan']
         );
+
         await dbRun(
           'UPDATE trust_scores SET score = LEAST(score + 1, 100), streak = streak + 1, punctuality = LEAST(punctuality + 1, 100), updated_at = NOW() WHERE student_id = ?',
           [student_id]
