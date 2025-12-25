@@ -1,7 +1,5 @@
-fastapi
-uvicorn
-face-recognition
-opencv-python-headless
-pillow
+flask
+deepface
+opencv-python
 numpy
-pymysql
+pillow

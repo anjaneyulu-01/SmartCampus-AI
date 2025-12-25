@@ -433,16 +433,16 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
     }
     
     const frames = req.files.map(f => f.buffer);
+    console.log(`[INFO] /checkin received ${frames.length} frame(s), processing...`);
     const result = await processFramesConsensus(frames, 2, 0.48);
+    console.log(`[DEBUG] /checkin result:`, result);
     
     if (result.status !== 'success') {
-      return res.status(400).json({ 
+      console.warn(`[WARN] /checkin no match: ${result.message}`);
+      return res.status(200).json({ 
         success: false, 
         message: result.message || 'No match',
-        debug: {
-          // When using Python, this may include best_distance/tolerance.
-          ...(typeof result === 'object' ? result : {})
-        }
+        status: 'no_face'
       });
     }
     
@@ -451,21 +451,32 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
     const confidence = result.confidence || 0;
 
     if (!student_id) {
-      return res.status(400).json({
+      console.warn(`[WARN] /checkin matched but no student_id in result`);
+      return res.status(200).json({
         success: false,
-        message: 'Recognition returned empty student_id',
-        debug: result
+        message: 'Recognition succeeded but returned empty student_id',
+        status: 'no_match'
       });
     }
 
     // Ensure the matched student exists; otherwise DB inserts may fail via FK.
-    const student = await dbGet('SELECT id, name FROM students WHERE id = ? LIMIT 1', [student_id]);
+    // If missing, auto-register to prevent 400 errors
+    let student = await dbGet('SELECT id, name FROM students WHERE id = ? LIMIT 1', [student_id]);
     if (!student) {
-      return res.status(400).json({
-        success: false,
-        message: `Unknown student_id: ${student_id}. Ensure known_faces filename matches an existing student id.`,
-        debug: result
-      });
+      console.warn(`[WARN] /checkin student not in DB: ${student_id}. Auto-registering...`);
+      try {
+        await dbRun('INSERT IGNORE INTO students (id, name) VALUES (?, ?)', [student_id, student_id]);
+        await dbRun('INSERT IGNORE INTO trust_scores (student_id, score, punctuality, consistency, streak) VALUES (?, 100, 100, 100, 0)', [student_id]);
+        student = { id: student_id, name: student_id };
+        console.log(`[INFO] Auto-registered student: ${student_id}`);
+      } catch (autoRegErr) {
+        console.error(`[ERROR] Failed to auto-register student ${student_id}:`, autoRegErr);
+        return res.status(200).json({
+          success: false,
+          message: `Failed to register student: ${student_id}`,
+          status: 'error'
+        });
+      }
     }
 
     try {

@@ -90,7 +90,7 @@ export default function ScanDevicePage() {
     }
   }, [])
 
-  const captureFrameBlob = async ({ forceFullFrame = false, targetSize = 360 } = {}) => {
+  const captureFrameBlob = async ({ forceFullFrame = false, targetSize = 480 } = {}) => {
     const video = videoRef.current
     const canvas = captureCanvasRef.current
     if (!video || !canvas) return null
@@ -122,15 +122,44 @@ export default function ScanDevicePage() {
     canvas.width = targetW
     canvas.height = targetH
 
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetW, targetH)
 
+    // Enhanced preprocessing for better face matching
+    const imageData = ctx.getImageData(0, 0, targetW, targetH)
+    const data = imageData.data
+
+    // Calculate histogram for contrast normalization
+    let minR = 255, maxR = 0, minG = 255, maxG = 0, minB = 255, maxB = 0
+    for (let i = 0; i < data.length; i += 4) {
+      minR = Math.min(minR, data[i])
+      maxR = Math.max(maxR, data[i])
+      minG = Math.min(minG, data[i + 1])
+      maxG = Math.max(maxG, data[i + 1])
+      minB = Math.min(minB, data[i + 2])
+      maxB = Math.max(maxB, data[i + 2])
+    }
+
+    // Avoid division by zero
+    const rangeR = maxR - minR || 1
+    const rangeG = maxG - minG || 1
+    const rangeB = maxB - minB || 1
+
+    // Apply histogram equalization for better contrast
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = Math.round(((data[i] - minR) / rangeR) * 255)       // R
+      data[i + 1] = Math.round(((data[i + 1] - minG) / rangeG) * 255) // G
+      data[i + 2] = Math.round(((data[i + 2] - minB) / rangeB) * 255) // B
+    }
+
+    ctx.putImageData(imageData, 0, 0)
+
     return new Promise((resolve) => {
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.75)
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.8)
     })
   }
 
-  const sendToBackend = async (blobs) => {
+  const sendToBackend = async (blobs, abortController) => {
     const fd = new FormData()
     for (let i = 0; i < blobs.length; i++) {
       fd.append('files', blobs[i], `frame_${Date.now()}_${i}.jpg`)
@@ -140,11 +169,15 @@ export default function ScanDevicePage() {
     const resp = await fetch('/api/checkin', {
       method: 'POST',
       body: fd,
+      signal: abortController ? abortController.signal : undefined,
     })
 
     const data = await resp.json().catch(() => ({}))
-    if (!resp.ok) {
-      const err = data?.error || data?.message || data?.detail || 'Scan failed'
+    
+    // 200 with success: false = no match found (not an error, just retry)
+    // 400+ = actual server error
+    if (resp.status >= 400) {
+      const err = data?.error || data?.message || `Server error (${resp.status})`
       throw new Error(err)
     }
 
@@ -159,67 +192,82 @@ export default function ScanDevicePage() {
       setProcessing(true)
       setMessage('Scanning…')
 
-      // Capture fewer frames for speed.
+      // Capture a single frame for faster recognition.
       const frames = []
-      for (let i = 0; i < 2; i++) {
-        // eslint-disable-next-line no-await-in-loop
-        const blob = await captureFrameBlob()
-        if (blob) frames.push(blob)
-        // Small spacing between frames.
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise((r) => setTimeout(r, 70))
-      }
+      const singleBlob = await captureFrameBlob()
+      if (singleBlob) frames.push(singleBlob)
 
       if (frames.length === 0) {
         setMessage('Camera warming up…')
         return
       }
 
-      const result = await sendToBackend(frames)
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 20000) // 20 second timeout for opencv+ArcFace (faster)
 
-      if (result?.success) {
-        const displayName = result?.student_name || result?.name || result?.student_id || 'Student'
-        const isAlreadyMarked = result?.message?.toLowerCase().includes('already recorded')
-        const status = isAlreadyMarked ? 'Already Marked' : (result?.status || 'Present')
+      try {
+        const result = await sendToBackend(frames, controller)
+        clearTimeout(timeout)
 
-        // Instant cross-tab update (portal + scan on same origin).
-        try {
-          if (result?.student_id) {
-            bcRef.current?.postMessage({
-              type: 'presence',
-              payload: {
-                student_id: result.student_id,
-                status: result?.status || 'Present',
-                timestamp: result?.timestamp || new Date().toISOString(),
-                avatarUrl: result?.avatarUrl,
-              },
-            })
+        if (result?.success) {
+          const displayName = result?.student_name || result?.name || result?.student_id || 'Student'
+          const isAlreadyMarked = result?.message?.toLowerCase().includes('already recorded')
+          const status = isAlreadyMarked ? 'Already Marked' : (result?.status || 'Present')
+
+          // Instant cross-tab update (portal + scan on same origin).
+          try {
+            if (result?.student_id) {
+              bcRef.current?.postMessage({
+                type: 'presence',
+                payload: {
+                  student_id: result.student_id,
+                  status: result?.status || 'Present',
+                  timestamp: result?.timestamp || new Date().toISOString(),
+                  avatarUrl: result?.avatarUrl,
+                },
+              })
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
+
+          setMessage(`${displayName} ${status}`)
+        } else {
+          setMessage(result?.message || 'Face Not Recognized')
         }
 
-        setMessage(`${displayName} ${status}`)
-      } else {
-        setMessage(result?.message || 'Face Not Recognized')
+        // Longer cooldown to prevent rapid re-triggers.
+        setCooldownUntil(Date.now() + 5000)
+        setTimeout(() => {
+          setMessage('Align your face to scan…')
+        }, 3000)
+      } catch (innerErr) {
+        clearTimeout(timeout)
+        if (innerErr.name === 'AbortError') {
+          throw new Error('Face recognition timed out. Please ensure your face is well-lit and try again.')
+        }
+        throw innerErr
       }
-
-      // Auto-reset after a short delay.
-      setCooldownUntil(Date.now() + 2500)
-      setTimeout(() => {
-        setMessage('Align your face to scan…')
-      }, 2000)
     } catch (e) {
-      console.error(e)
+      console.error('Scan error:', e)
       const msg = String(e?.message || '')
-
-      // If we cropped wrongly (common when box coords were off), retry once with a full frame.
-      if (msg.toLowerCase().includes('no faces detected') && lastFaceBoxRef.current) {
+      
+      // Better error messages
+      if (msg.includes('Abort') || msg.includes('abort')) {
+        setMessage('Scan timeout - try again')
+      } else if (msg.includes('Failed to fetch')) {
+        setMessage('Server unreachable - check backend')
+      } else {
+        const errorMsg = msg.toLowerCase().includes('no faces detected') ? 'No face detected' : (msg || 'Scan failed')
+        setMessage(errorMsg)
         try {
           lastFaceBoxRef.current = null
-          const blob = await captureFrameBlob({ forceFullFrame: true, targetSize: 480 })
+          const blob = await captureFrameBlob({ forceFullFrame: true, targetSize: 720 })
           if (blob) {
-            const retry = await sendToBackend([blob])
+            const retryController = new AbortController()
+            const retryTimeout = setTimeout(() => retryController.abort(), 10000)
+            const retry = await sendToBackend([blob], retryController)
+            clearTimeout(retryTimeout)
             if (retry?.success) {
               const displayName = retry?.student_name || retry?.name || retry?.student_id || 'Student'
               const isAlreadyMarked = retry?.message?.toLowerCase().includes('already recorded')
@@ -337,19 +385,19 @@ export default function ScanDevicePage() {
   return (
     <div className="min-h-screen bg-black flex flex-col">
       <div className="flex-1 grid place-items-center p-4">
-        <div className="w-full max-w-2xl">
+        <div className="w-full max-w-sm">
           <div className="rounded-2xl overflow-hidden border border-white/10">
             <div className="relative aspect-video bg-black">
               <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
               <canvas ref={captureCanvasRef} className="hidden" />
-              <div className="absolute inset-0 grid place-items-end p-4">
-                <div className="px-4 py-3 rounded-xl bg-black/60 border border-white/10 text-white text-lg font-semibold">
+              <div className="absolute inset-0 grid place-items-end p-3">
+                <div className="px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm font-semibold">
                   {message}
                 </div>
               </div>
             </div>
           </div>
-          <div className="mt-3 text-xs text-gray-400 text-center">
+          <div className="mt-2 text-xs text-gray-400 text-center">
             Virtual biometric device • URL: /scan
           </div>
         </div>

@@ -386,35 +386,46 @@ export async function initDb() {
       ]);
     }
 
-    // Seed demo data
-    const [studentRows] = await db.query('SELECT COUNT(*) as count FROM students');
-    if (studentRows[0].count === 0) {
-      const students = [
-        ['sai', 'Sai', '/avatars/sai.jpg', 1, 1, '92460118732', 'A'],
-        ['image_person', 'Image Person', '/avatars/image_person.jpg', 1, 2, null, 'A']
-      ];
+    // Seed demo data (safe to re-run)
+    const students = [
+      ['sai', 'Sai', '/avatars/sai.jpg', 1, 1, '92460118732', 'A'],
+      ['image_person', 'Image Person', '/avatars/image_person.jpg', 1, 2, null, 'A']
+    ];
+    
+    for (const [sid, name, avatar, r, c, mobile, cls] of students) {
+      await db.query(`
+        INSERT INTO students (id, name, avatar_url, seat_row, seat_col, mobile, class)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          name = VALUES(name),
+          avatar_url = VALUES(avatar_url),
+          seat_row = VALUES(seat_row),
+          seat_col = VALUES(seat_col),
+          mobile = VALUES(mobile),
+          class = VALUES(class)
+      `, [sid, name, avatar, r, c, mobile, cls]);
       
-      for (const [sid, name, avatar, r, c, mobile, cls] of students) {
-        await db.query(`
-          INSERT INTO students (id, name, avatar_url, seat_row, seat_col, mobile, class)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE
-            name = VALUES(name),
-            avatar_url = VALUES(avatar_url),
-            seat_row = VALUES(seat_row),
-            seat_col = VALUES(seat_col),
-            mobile = VALUES(mobile),
-            class = VALUES(class)
-        `, [sid, name, avatar, r, c, mobile, cls]);
-        
-        // Insert trust score
-        await db.query(`
-          INSERT INTO trust_scores (student_id, score, punctuality, consistency, streak)
-          VALUES (?, 100, 100, 100, 0)
-          ON DUPLICATE KEY UPDATE
-            student_id = VALUES(student_id)
-        `, [sid]);
-      }
+      // Ensure trust score exists
+      await db.query(`
+        INSERT INTO trust_scores (student_id, score, punctuality, consistency, streak)
+        VALUES (?, 100, 100, 100, 0)
+        ON DUPLICATE KEY UPDATE
+          student_id = VALUES(student_id)
+      `, [sid]);
+    }
+
+    // Ensure dataset folder names are registered as students so face matches do not 400
+    const datasetStudents = ['Anjaneyulu', 'Rahul', 'Sai', 'Santhosh', 'Venkat'];
+    for (const sid of datasetStudents) {
+      await db.query(`
+        INSERT IGNORE INTO students (id, name)
+        VALUES (?, ?)
+      `, [sid, sid]);
+
+      await db.query(`
+        INSERT IGNORE INTO trust_scores (student_id, score, punctuality, consistency, streak)
+        VALUES (?, 100, 100, 100, 0)
+      `, [sid]);
     }
     
     // Seed users

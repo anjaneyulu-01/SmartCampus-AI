@@ -34,6 +34,23 @@ export default function StudentsPage() {
     fetchStudents(selectedClass)
   }, [selectedClass, fetchStudents])
 
+  // Live refresh on presence events so the page updates without manual reload.
+  useEffect(() => {
+    let timer = 0
+    const onPresence = () => {
+      // Debounce refetch to batch bursts of events.
+      if (timer) window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        fetchStudents(selectedClass)
+      }, 700)
+    }
+    window.addEventListener('presence_event', onPresence)
+    return () => {
+      window.removeEventListener('presence_event', onPresence)
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [fetchStudents, selectedClass])
+
   const classOptions = useMemo(() => {
     const unique = new Set()
     ;(students || []).forEach((s) => {

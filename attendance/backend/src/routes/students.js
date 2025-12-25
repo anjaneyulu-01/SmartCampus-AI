@@ -185,7 +185,34 @@ router.post('/', requireAuth, requireRole('hod'), upload.fields([
     const faceFile = req.files?.face?.[0];
     
     if (avatarFile) {
+      // Store as <id>.jpg for consistency
       avatarUrl = `/avatars/${student_id}.jpg`;
+      try {
+        const extUp = path.extname(avatarFile.originalname) || '.jpg';
+        const target = path.join(AVATARS_DIR, `${student_id}.jpg`);
+        if (avatarFile.path && fs.existsSync(avatarFile.path)) {
+          // If upload wasn't already .jpg, copy to standardized .jpg name
+          if (extUp.toLowerCase() !== '.jpg') {
+            fs.copyFileSync(avatarFile.path, target);
+          }
+        }
+      } catch {}
+    } else if (faceFile) {
+      // If only face image uploaded, reuse it as avatar too
+      const ext = path.extname(faceFile.originalname) || '.jpg';
+      const target = path.join(AVATARS_DIR, `${student_id}${ext}`);
+      try {
+        if (faceFile.path && fs.existsSync(faceFile.path)) {
+          fs.copyFileSync(faceFile.path, target);
+          avatarUrl = `/avatars/${student_id}${ext}`;
+        }
+      } catch {
+        // fallback: check existing .jpg avatar
+        const existingAvatar = path.join(AVATARS_DIR, `${student_id}.jpg`);
+        if (fs.existsSync(existingAvatar)) {
+          avatarUrl = `/avatars/${student_id}.jpg`;
+        }
+      }
     } else {
       // Check if avatar already exists
       const existingAvatar = path.join(AVATARS_DIR, `${student_id}.jpg`);
@@ -221,12 +248,13 @@ router.post('/', requireAuth, requireRole('hod'), upload.fields([
       // Keep the Python recognition DB in sync with face uploads.
       // This makes the standalone /scan device recognize newly enrolled faces without restarting Python.
       await reloadPythonFaces();
+      // Do not auto-mark attendance on enrollment; initial state should be absent until scan/mark.
     }
-    
-    res.json({ 
-      success: true, 
-      student_id, 
-      avatar_url: avatarUrl 
+
+    res.json({
+      success: true,
+      student_id,
+      avatar_url: avatarUrl
     });
   } catch (error) {
     console.error('[ERROR] Register student:', error);
@@ -245,6 +273,8 @@ router.delete('/:student_id', requireAuth, requireRole('hod', 'admin'), async (r
     await dbRun('DELETE FROM students WHERE id = ?', [student_id]);
     await dbRun('DELETE FROM trust_scores WHERE student_id = ?', [student_id]);
     await dbRun('DELETE FROM attendance_events WHERE student_id = ?', [student_id]);
+    // Remove Python service encodings copy
+    await dbRun('DELETE FROM student_face_encodings WHERE student_id = ?', [student_id]);
     
     // Delete files
     const facePath = path.join(KNOWN_FACES_DIR, `${student_id}.jpg`);
@@ -253,8 +283,11 @@ router.delete('/:student_id', requireAuth, requireRole('hod', 'admin'), async (r
     if (fs.existsSync(facePath)) fs.unlinkSync(facePath);
     if (fs.existsSync(avatarPath)) fs.unlinkSync(avatarPath);
     
-    // Reload known faces
+    // Reload known faces in Node and Python services
     await loadKnownFaces();
+    try {
+      await reloadPythonFaces();
+    } catch {}
     
     res.json({ success: true });
   } catch (error) {

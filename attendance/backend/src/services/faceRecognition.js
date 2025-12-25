@@ -8,7 +8,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const KNOWN_FACES_DIR = path.join(path.dirname(__dirname), '..', 'known_faces');
 const USE_PYTHON_FACE = process.env.USE_PYTHON_FACE === '1';
-const PY_FACE_URL = process.env.PY_FACE_URL || 'http://127.0.0.1:7000/match';
+// Point to DeepFace Flask matcher by default (new service)
+// Prefer explicit IPv4 loopback to avoid ::1/IPv6 resolution issues on Windows
+const PY_FACE_URL = process.env.PY_FACE_URL || 'http://127.0.0.1:5000/match';
+// Explicit dataset path for the Python matcher (avoid relying on cwd)
+const PY_DB_PATH = process.env.DF_DB_PATH || path.join(__dirname, '..', '..', 'dataset');
 
 // Lazy load face-api.js to avoid errors if not available
 let faceapi = null;
@@ -26,22 +30,33 @@ async function postJsonDetailed(urlStr, bodyObj) {
 
   // Prefer native fetch when available.
   if (typeof fetch === 'function') {
-    const res = await fetch(urlStr, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload,
-    });
-    const raw = await res.text();
-    const ct = (res.headers.get('content-type') || '').toLowerCase();
-    let data = raw;
-    if (ct.includes('application/json')) {
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        data = raw;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 70000); // 70 second timeout
+    
+    try {
+      const res = await fetch(urlStr, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
+      const raw = await res.text();
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      let data = raw;
+      if (ct.includes('application/json')) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = raw;
+        }
       }
+      return { ok: res.ok, status: res.status, data, raw };
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
     }
-    return { ok: res.ok, status: res.status, data, raw };
   }
 
   // Fallback for older Node versions without global fetch.
@@ -59,6 +74,7 @@ async function postJsonDetailed(urlStr, bodyObj) {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
         },
+        timeout: 70000, // 70 second timeout
       },
       (res) => {
         let raw = '';
@@ -78,29 +94,61 @@ async function postJsonDetailed(urlStr, bodyObj) {
     );
 
     req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
     req.write(payload);
     req.end();
   });
 }
 
 async function callPythonRecognition(framesBytes) {
-  try {
-    const images = framesBytes.map((b) => b.toString('base64'));
-    const resp = await postJsonDetailed(PY_FACE_URL, { images });
+  const images = framesBytes.map((b) => b.toString('base64'));
+  const attemptOnce = async () => {
+    const start = Date.now();
+    try {
+      console.log(`[INFO] Calling Python matcher: ${PY_FACE_URL} (db_path=${PY_DB_PATH})`);
+      const resp = await postJsonDetailed(PY_FACE_URL, {
+        images,
+        db_path: PY_DB_PATH,
+      });
+      const durMs = Date.now() - start;
+      console.log(`[INFO] Python matcher completed in ${durMs} ms (status=${resp?.status})`);
 
-    // Python returns structured JSON even on non-2xx; preserve it.
-    if (resp && typeof resp.data === 'object' && resp.data) {
+      // Python returns structured JSON even on non-2xx; preserve it.
+      if (resp && typeof resp.data === 'object' && resp.data) {
+        return resp.data;
+      }
+
+      if (!resp.ok) {
+        return { status: 'error', message: `python http ${resp.status}`, raw: resp.raw };
+      }
       return resp.data;
+    } catch (err) {
+      const durMs = Date.now() - start;
+      console.warn(`[WARN] Python matcher error after ${durMs} ms:`, err?.message || err);
+      throw err;
     }
+  };
 
-    if (!resp.ok) {
-      return { status: 'error', message: `python http ${resp.status}`, raw: resp.raw };
-    }
-
-    return resp.data;
+  try {
+    return await attemptOnce();
   } catch (err) {
+    // Simple one-time retry on transient errors
+    const msg = String(err?.message || '').toLowerCase();
+    if (err?.name === 'AbortError' || msg.includes('timeout') || msg.includes('econnreset') || msg.includes('reset')) {
+      console.log('[INFO] Retrying Python matcher once after transient error…');
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        return await attemptOnce();
+      } catch (err2) {
+        console.error('[ERROR] Python face service retry failed:', err2);
+        return { status: 'error', message: err2?.message || 'python service failed' };
+      }
+    }
     console.error('[ERROR] Python face service:', err);
-    return { status: 'error', message: err.message || 'python service failed' };
+    return { status: 'error', message: err?.message || 'python service failed' };
   }
 }
 
@@ -115,7 +163,11 @@ export async function reloadPythonFaces() {
     const base = new URL(PY_FACE_URL);
     base.pathname = '/reload';
     base.search = '';
-    return await postJson(base.toString(), {});
+    const resp = await postJsonDetailed(base.toString(), {});
+    if (resp && typeof resp.data === 'object' && resp.data) {
+      return resp.data;
+    }
+    return { status: resp.ok ? 'success' : 'error', message: resp.raw };
   } catch (err) {
     console.error('[WARN] Python face reload failed:', err);
     return { status: 'error', message: err?.message || 'reload failed' };
@@ -127,6 +179,12 @@ export async function reloadPythonFaces() {
  */
 async function loadModels() {
   if (modelsLoaded) return;
+  if (USE_PYTHON_FACE) {
+    // When Python service is enabled, skip Node face-api.js to reduce noise and startup cost.
+    console.log('[INFO] Using Python face service; skipping Node face models');
+    modelsLoaded = false;
+    return;
+  }
   
   try {
     // Try to load face-api.js dynamically
