@@ -11,9 +11,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const AVATARS_DIR = path.join(path.dirname(__dirname), '..', 'avatars');
 const KNOWN_FACES_DIR = path.join(path.dirname(__dirname), '..', 'known_faces');
+const DATASET_DIR = path.join(path.dirname(__dirname), '..', 'dataset');
 
 // Ensure directories exist
-[AVATARS_DIR, KNOWN_FACES_DIR].forEach((dir) => {
+[AVATARS_DIR, KNOWN_FACES_DIR, DATASET_DIR].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -244,6 +245,24 @@ router.post('/', requireAuth, requireRole('hod'), upload.fields([
     
     // Reload known faces if face image was uploaded
     if (faceFile) {
+      // Also copy the face image to the dataset folder for DeepFace recognition
+      try {
+        const studentDatasetDir = path.join(DATASET_DIR, student_id);
+        if (!fs.existsSync(studentDatasetDir)) {
+          fs.mkdirSync(studentDatasetDir, { recursive: true });
+        }
+        
+        // Copy face image to dataset folder
+        const ext = path.extname(faceFile.originalname) || '.jpg';
+        const datasetImagePath = path.join(studentDatasetDir, `1${ext}`);
+        if (faceFile.path && fs.existsSync(faceFile.path)) {
+          fs.copyFileSync(faceFile.path, datasetImagePath);
+          console.log(`[INFO] Added face image to dataset: ${student_id}/1${ext}`);
+        }
+      } catch (datasetError) {
+        console.error('[ERROR] Failed to add to dataset:', datasetError);
+      }
+      
       await loadKnownFaces();
       // Keep the Python recognition DB in sync with face uploads.
       // This makes the standalone /scan device recognize newly enrolled faces without restarting Python.
