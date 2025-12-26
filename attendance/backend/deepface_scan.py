@@ -359,6 +359,7 @@ def match_faces():
         if name and confidence:
             return jsonify({
                 'success': True,
+                'status': 'success',
                 'name': name,
                 'student_id': name,
                 'confidence': float(confidence),
@@ -367,8 +368,8 @@ def match_faces():
         else:
             return jsonify({
                 'success': False,
-                'message': 'no match',
-                'status': 'error'
+                'message': 'No match found',
+                'status': 'no_match'
             }), 200
             
     except Exception as e:

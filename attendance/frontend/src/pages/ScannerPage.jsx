@@ -11,6 +11,28 @@ export default function ScannerPage() {
   const [loading, setLoading] = useState(false)
   const [detectedPerson, setDetectedPerson] = useState(null)
 
+  // Listen for real-time presence events from other sources (e.g., other devices scanning)
+  useEffect(() => {
+    const onPresence = (event) => {
+      const payload = event?.detail
+      if (!payload?.student_id) return
+      
+      const { name, student_id, status, alreadyMarked } = payload
+      
+      // Show notification for scans from other sources
+      console.log('[Scanner] Presence update:', payload)
+      
+      if (alreadyMarked) {
+        toast.success(`${name || student_id} already marked as present`, { duration: 4000 })
+      } else {
+        toast.success(`${name || student_id} marked as ${(status || 'present').toLowerCase()}`, { duration: 4000 })
+      }
+    }
+    
+    window.addEventListener('presence_event', onPresence)
+    return () => window.removeEventListener('presence_event', onPresence)
+  }, [])
+
   useEffect(() => {
     const initCamera = async () => {
       try {
@@ -85,20 +107,15 @@ export default function ScannerPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      const { student_id, status, confidence } = resp.data || {}
+      const { student_id, student_name, status, confidence, message, alreadyMarked } = resp.data || {}
+      
       if (!student_id) {
-        toast.error('No match found')
+        toast.error(message || 'No match found')
         setLoading(false)
         return
       }
 
-      let name = student_id
-      try {
-        const s = await axiosApi.get(`/students/${student_id}`)
-        name = s?.data?.name || name
-      } catch {
-        // ignore
-      }
+      const name = student_name || student_id
 
       setDetectedPerson({
         name,
@@ -106,8 +123,15 @@ export default function ScannerPage() {
         status: status || 'Present',
         confidence: Number(confidence || 0),
         timestamp: new Date().toLocaleTimeString(),
+        alreadyMarked: alreadyMarked || false,
       })
-      toast.success('Attendance marked')
+      
+      // Show appropriate message
+      if (alreadyMarked) {
+        toast.success(`${name} already marked as present`, { duration: 4000 })
+      } else {
+        toast.success(`${name} marked as present`, { duration: 4000 })
+      }
     } catch (error) {
       console.error('Error capturing frame:', error)
       toast.error(error?.response?.data?.message || error?.response?.data?.error || 'Recognition failed')
@@ -226,11 +250,13 @@ export default function ScannerPage() {
           className="space-y-6"
         >
           {detectedPerson ? (
-            <div className="card p-6 border-l-4 border-green-500">
+            <div className={`card p-6 border-l-4 ${
+              detectedPerson.alreadyMarked ? 'border-yellow-500' : 'border-green-500'
+            }`}>
               <div className="flex items-center gap-2 mb-4">
-                <CheckCircle className="text-green-400" size={24} />
+                <CheckCircle className={detectedPerson.alreadyMarked ? 'text-yellow-400' : 'text-green-400'} size={24} />
                 <h3 className="text-lg font-bold text-white">
-                  Face Detected
+                  {detectedPerson.alreadyMarked ? 'Already Marked' : 'Face Detected'}
                 </h3>
               </div>
 
@@ -259,8 +285,13 @@ export default function ScannerPage() {
 
                 <div className="bg-glass rounded-lg p-4">
                   <p className="text-gray-400 text-sm">Status</p>
-                  <p className="text-lg font-bold text-white mt-1">
-                    {detectedPerson.status}
+                  <p className={`text-lg font-bold mt-1 ${
+                    detectedPerson.alreadyMarked ? 'text-yellow-400' : 'text-green-400'
+                  }`}>
+                    {detectedPerson.alreadyMarked 
+                      ? `${detectedPerson.name} already marked as present` 
+                      : `${detectedPerson.name} marked as present`
+                    }
                   </p>
                 </div>
 

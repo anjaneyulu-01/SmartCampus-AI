@@ -498,15 +498,30 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
 
         if (existing?.id) {
           const avatarUrl = await getAvatarUrlForStudent(student_id);
+          const studentName = student?.name || student_id;
+          
+          // Broadcast the already marked event
+          broadcastPresence({
+            student_id,
+            name: studentName,
+            class: student?.class || '',
+            status: 'Already Marked',
+            timestamp: new Date().toISOString(),
+            confidence,
+            avatarUrl,
+            alreadyMarked: true
+          });
+          
           return res.json({
             success: true,
             student_id,
-            student_name: student?.name || student_id,
+            student_name: studentName,
             avatarUrl,
-            status: 'Present',
+            status: 'Already Marked',
             confidence,
-            message: 'already recorded',
+            message: `${studentName} already marked as present`,
             timestamp: existing.ts,
+            alreadyMarked: true
           });
         }
 
@@ -532,10 +547,13 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
     const avatarUrl = await getAvatarUrlForStudent(student_id);
     const statusLabel = is_suspicious ? 'Suspicious' : 'Present';
     const nowIso = new Date().toISOString();
+    const studentName = student?.name || student_id;
     
     try {
       broadcastPresence({
         student_id,
+        name: studentName,
+        class: student?.class || '',
         status: statusLabel,
         timestamp: nowIso,
         confidence,
@@ -548,10 +566,11 @@ router.post('/checkin', upload.array('files', 10), async (req, res) => {
     res.json({
       success: true,
       student_id,
-      student_name: student?.name || student_id,
+      student_name: studentName,
       avatarUrl,
       status: statusLabel,
       confidence,
+      message: `${studentName} marked as ${statusLabel.toLowerCase()}`,
       timestamp: nowIso,
     });
   } catch (error) {
