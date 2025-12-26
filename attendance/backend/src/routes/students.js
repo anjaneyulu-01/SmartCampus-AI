@@ -298,9 +298,16 @@ router.delete('/:student_id', requireAuth, requireRole('hod', 'admin'), async (r
     // Delete files
     const facePath = path.join(KNOWN_FACES_DIR, `${student_id}.jpg`);
     const avatarPath = path.join(AVATARS_DIR, `${student_id}.jpg`);
+    const datasetPath = path.join(DATASET_DIR, student_id);
     
     if (fs.existsSync(facePath)) fs.unlinkSync(facePath);
     if (fs.existsSync(avatarPath)) fs.unlinkSync(avatarPath);
+    
+    // Delete entire dataset folder for this student
+    if (fs.existsSync(datasetPath)) {
+      fs.rmSync(datasetPath, { recursive: true, force: true });
+      console.log(`[INFO] Deleted dataset folder: ${student_id}`);
+    }
     
     // Reload known faces in Node and Python services
     await loadKnownFaces();
