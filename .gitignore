@@ -38,6 +38,9 @@ out/
 
 # Temporary files
 temp/
+attendance/backend/avatars/
+attendance/backend/known_faces/
+attendance/backend/dataset/
 tmp/
 *.tmp
 
