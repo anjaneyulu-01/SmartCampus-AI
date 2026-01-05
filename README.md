@@ -53,22 +53,10 @@ attendance/
    - Backend: `npm start` or `python python_recognition.py`
    - Frontend: `npm run dev`
 
----
 
-## Deployment
-- See deployment instructions in the project documentation or ask for cloud setup help.
 
 ---
 
-## License
-MIT
 
 ---
 
-## Example Dashboard
-![Dashboard Example](https://raw.githubusercontent.com/anjaneyulu-01/SmartCampus-AI/main/assets/dashboard_example.png)
-
----
-
-## Contact & Support
-For issues or feature requests, open a GitHub issue or contact the maintainer.
