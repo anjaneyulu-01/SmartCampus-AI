@@ -45,7 +45,7 @@ export default function AttendanceSectionsPage() {
             Branch: <span className="text-gray-200">{department?.name || '...'}</span>
           </p>
         </div>
-        <button className="btn-secondary px-4 py-2" onClick={() => navigate('/attendance')}>
+        <button className="btn-secondary px-4 py-2" onClick={() => navigate('/portal/attendance')}>
           Back to Branches
         </button>
       </div>
@@ -74,7 +74,7 @@ export default function AttendanceSectionsPage() {
                   <tr
                     key={s.id}
                     className="hover:bg-white/5 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/attendance/${deptId}/${encodeURIComponent(s.code)}`)}
+                    onClick={() => navigate(`/portal/attendance/${deptId}/${encodeURIComponent(s.code)}`)}
                   >
                     <td className="px-6 py-4 text-sm text-white">{s.name}</td>
                     <td className="px-6 py-4 text-sm text-gray-300">{s.code}</td>

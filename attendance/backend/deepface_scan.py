@@ -20,6 +20,9 @@ from typing import Optional, Tuple, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
+# MongoDB Atlas connection
+from mongo_connect import get_mongo_db
+
 import cv2  # type: ignore
 import numpy as np
 from flask import Flask, jsonify, request
@@ -38,6 +41,9 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
+
+# Initialize MongoDB connection (optional: use in endpoints as needed)
+mongo_db = get_mongo_db()
 
 # Thread pool for async processing
 executor = ThreadPoolExecutor(max_workers=4)

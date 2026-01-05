@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAttendanceStore } from '../stores'
 import { useAuthStore } from '../stores'
 import { motion } from 'framer-motion'
@@ -21,6 +22,29 @@ export default function DashboardPage() {
   const fetchStudents = useAttendanceStore((state) => state.fetchStudents)
   const user = useAuthStore((state) => state.user)
   const [selectedClass, setSelectedClass] = useState('all')
+  const navigate = useNavigate()
+  // Export today's attendance as CSV
+  const handleExportReport = () => {
+    if (!attendance || attendance.length === 0) {
+      alert('No attendance data to export.')
+      return
+    }
+    const headers = Object.keys(attendance[0])
+    const csvRows = [headers.join(',')]
+    attendance.forEach(row => {
+      csvRows.push(headers.map(h => JSON.stringify(row[h] ?? '')).join(','))
+    })
+    const csvContent = csvRows.join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `attendance_${new Date().toISOString().slice(0,10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   useEffect(() => {
     fetchStats()
@@ -190,8 +214,18 @@ export default function DashboardPage() {
             <p className="text-gray-400 text-sm mb-4">
               Access frequent operations quickly
             </p>
-            <button className="btn-primary w-full mb-3">Mark Attendance</button>
-            <button className="btn-secondary w-full">Export Report</button>
+            <button
+              className="btn-primary w-full mb-3"
+              onClick={() => navigate('/portal/attendance')}
+            >
+              Mark Attendance
+            </button>
+            <button
+              className="btn-secondary w-full"
+              onClick={handleExportReport}
+            >
+              Export Report
+            </button>
           </div>
           <div className="card p-6 border-l-4 border-blue-500">
             <h3 className="text-lg font-semibold text-white mb-2">

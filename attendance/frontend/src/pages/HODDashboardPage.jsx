@@ -285,7 +285,7 @@ const HODDashboardPage = () => {
             <div className="card overflow-hidden">
               <div className="sticky top-0 z-20 bg-slate-950/40 backdrop-blur-md p-6 border-b border-white/10 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-white">Faculty Members</h3>
-                <button className="btn-primary px-4 py-2" onClick={() => navigate('/faculty')}>
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/portal/faculty')}>
                   Add Faculty
                 </button>
               </div>
@@ -325,7 +325,7 @@ const HODDashboardPage = () => {
                   <h3 className="text-lg font-semibold text-white">Attendance</h3>
                   <p className="text-sm text-gray-400 mt-1">Open branches → sections → mark attendance</p>
                 </div>
-                <button className="btn-primary px-4 py-2" onClick={() => navigate('/attendance')}>
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/portal/attendance')}>
                   Open Attendance
                 </button>
               </div>
@@ -337,7 +337,7 @@ const HODDashboardPage = () => {
                     <button
                       key={b.id || b.code}
                       className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg p-4 text-left transition-colors"
-                      onClick={() => navigate(`/attendance/${b.id}`)}
+                      onClick={() => navigate(`/portal/attendance/${b.id}`)}
                     >
                       <div className="text-white font-semibold">{b.name}</div>
                       <div className="text-xs text-gray-400 mt-1">{b.code} • {b.total_sections ?? 0} sections</div>
@@ -355,7 +355,7 @@ const HODDashboardPage = () => {
                   <h3 className="text-lg font-semibold text-white">Announcements</h3>
                   <p className="text-sm text-gray-400 mt-1">Create and view announcements</p>
                 </div>
-                <button className="btn-primary px-4 py-2" onClick={() => navigate('/announcements')}>
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/portal/announcements')}>
                   Open Announcements
                 </button>
               </div>
@@ -369,7 +369,7 @@ const HODDashboardPage = () => {
             <div className="card overflow-hidden">
               <div className="sticky top-0 z-20 bg-slate-950/40 backdrop-blur-md p-6 border-b border-white/10 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-white">Staff & Workers</h3>
-                <button className="btn-primary px-4 py-2" onClick={() => navigate('/workers')}>
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/portal/workers')}>
                   Add Staff
                 </button>
               </div>
@@ -408,7 +408,7 @@ const HODDashboardPage = () => {
             <div className="card overflow-hidden">
               <div className="sticky top-0 z-20 bg-slate-950/40 backdrop-blur-md p-6 border-b border-white/10 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-white">Students</h3>
-                <button className="btn-primary px-4 py-2" onClick={() => navigate('/students')}>
+                <button className="btn-primary px-4 py-2" onClick={() => navigate('/portal/students')}>
                   Add Student
                 </button>
               </div>

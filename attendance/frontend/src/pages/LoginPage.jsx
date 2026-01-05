@@ -21,9 +21,11 @@ export default function LoginPage() {
     e.preventDefault()
     const success = await login(username, password)
     if (success) {
+      // Role-aware redirect: teachers go to their portal, others to main dashboard
+      const role = (useAuthStore.getState().user?.role || '').toLowerCase()
+      const target = role === 'teacher' ? '/teacher' : '/portal'
       toast.success('Welcome back!')
-      // Small delay to ensure user state is loaded
-      setTimeout(() => navigate('/'), 100)
+      setTimeout(() => navigate(target), 50)
     }
   }
 

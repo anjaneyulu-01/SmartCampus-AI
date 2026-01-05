@@ -2,8 +2,7 @@ import express from 'express';
 import { connectMongo, getDb } from '../database/mongo.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
-const router = express.Router()
-
+const router = express.Router();
 
 /**
  * GET /api/departments - Get all departments
@@ -50,6 +49,12 @@ router.get('/', requireAuth, async (req, res) => {
           total_students: { $size: '$students' }
         }
       }
-
+    ]).toArray();
+    res.json(departments);
+  } catch (error) {
+    console.error('[ERROR] Get departments:', error);
+    res.status(500).json({ error: 'Failed to fetch departments' });
+  }
+});
 
 export default router;

@@ -6,28 +6,32 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-
 /**
  * POST /api/login
  * Supports all roles: admin, hod, teacher, faculty, worker, student
  */
 router.post('/login', async (req, res) => {
+  console.log('[LOGIN ATTEMPT]', req.body);
   try {
     await connectMongo();
     const db = getDb();
     const { username, password } = req.body;
     if (!username || !password) {
+      console.log('[LOGIN FAIL] Missing username or password');
       return res.status(400).json({ error: 'username & password required' });
     }
     const user = await db.collection('users').findOne({ username });
     if (!user) {
+      console.log(`[LOGIN FAIL] User not found: ${username}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     if (!verifyPassword(password, user.salt, user.password_hash)) {
+      console.log(`[LOGIN FAIL] Password mismatch for user: ${username}`);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const token = createToken(username);
     if (user.is_active === false) {
+      console.log(`[LOGIN FAIL] Account inactive: ${username}`);
       return res.status(403).json({ error: 'Account inactive' });
     }
     let department_name = null;
@@ -35,6 +39,7 @@ router.post('/login', async (req, res) => {
       const dept = await db.collection('departments').findOne({ _id: user.department_id });
       department_name = dept?.name || null;
     }
+    console.log(`[LOGIN SUCCESS] ${username}`);
     res.json({
       token,
       role: user.role,
@@ -51,7 +56,6 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
-
 
 /**
  * GET /api/me
@@ -85,4 +89,3 @@ router.get('/me', requireAuth, async (req, res) => {
 });
 
 export default router;
-

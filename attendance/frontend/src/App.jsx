@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './stores'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
+import TeacherDashboardLayout from './layouts/TeacherDashboardLayout'
 import DashboardPage from './pages/DashboardPage'
 import HODDashboardPage from './pages/HODDashboardPage'
 import ScanDevicePage from './pages/ScanDevicePage'
@@ -16,6 +17,16 @@ import AttendanceBranchesPage from './pages/AttendanceBranchesPage'
 import AttendanceSectionsPage from './pages/AttendanceSectionsPage'
 import AttendanceMarkPage from './pages/AttendanceMarkPage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
+import TeacherDashboard from './pages/teacher/TeacherDashboard'
+import TeacherClasses from './pages/teacher/TeacherClasses'
+import TeacherStudents from './pages/teacher/TeacherStudents'
+import TeacherAttendance from './pages/teacher/TeacherAttendance'
+import TeacherAssignments from './pages/teacher/TeacherAssignments'
+import TeacherExams from './pages/teacher/TeacherExams'
+import TeacherMessages from './pages/teacher/TeacherMessages'
+import TeacherResources from './pages/teacher/TeacherResources'
+import TeacherTimetable from './pages/teacher/TeacherTimetable'
+import TeacherProfile from './pages/teacher/TeacherProfile'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -44,11 +55,36 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/scan" element={<ScanDevicePage />} />
           <Route path="/face-scan" element={<Navigate to="/scan" replace />} />
           <Route path="/scanner" element={<Navigate to="/scan" replace />} />
+          
+          {/* Teacher Dashboard Routes */}
           <Route
-            path="/"
+            path="/teacher"
+            element={
+              <ProtectedRoute>
+                <TeacherDashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<TeacherDashboard />} />
+            <Route path="classes" element={<TeacherClasses />} />
+            <Route path="students" element={<TeacherStudents />} />
+            <Route path="attendance" element={<TeacherAttendance />} />
+            <Route path="assignments" element={<TeacherAssignments />} />
+            <Route path="exams" element={<TeacherExams />} />
+            <Route path="analytics" element={<div className="text-white">Analytics Page</div>} />
+            <Route path="messages" element={<TeacherMessages />} />
+            <Route path="resources" element={<TeacherResources />} />
+            <Route path="timetable" element={<TeacherTimetable />} />
+            <Route path="profile" element={<TeacherProfile />} />
+          </Route>
+
+          {/* HOD/Admin Dashboard Routes */}
+          <Route
+            path="/portal"
             element={
               <ProtectedRoute>
                 <DashboardLayout />
@@ -57,7 +93,12 @@ function App() {
           >
             <Route
               index
-              element={(user?.role || '').toLowerCase() === 'hod' ? <HODDashboardPage /> : <DashboardPage />}
+              element={(() => {
+                const role = (user?.role || '').toLowerCase()
+                if (role === 'teacher') return <Navigate to="/teacher" replace />
+                if (role === 'hod') return <HODDashboardPage />
+                return <DashboardPage />
+              })()}
             />
             <Route path="students" element={<StudentsPage />} />
             <Route path="faculty" element={<FacultyPage />} />
@@ -69,7 +110,7 @@ function App() {
             <Route path="attendance/:departmentId/:classCode" element={<AttendanceMarkPage />} />
             <Route path="announcements" element={<AnnouncementsPage />} />
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
       <Toaster

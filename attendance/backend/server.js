@@ -3,17 +3,17 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { initDb } from './src/database/db.js';
 import { loadKnownFaces } from './src/services/faceRecognition.js';
-import authRoutes from './src/routes/auth.js';
-import studentRoutes from './src/routes/students.js';
-import attendanceRoutes from './src/routes/attendance.js';
-import trustRoutes from './src/routes/trust.js';
-import insightRoutes from './src/routes/insights.js';
-import departmentRoutes from './src/routes/departments.js';
-import facultyRoutes from './src/routes/faculty.js';
-import workerRoutes from './src/routes/workers.js';
-import announcementRoutes from './src/routes/announcements.js';
+import authRoutes from './src/routes/auth.mjs';
+import studentRoutes from './src/routes/students.mjs';
+import attendanceRoutes from './src/routes/attendance.mjs';
+import trustRoutes from './src/routes/trust.mjs';
+import insightRoutes from './src/routes/insights.mjs';
+import departmentRoutes from './src/routes/departments.mjs';
+import facultyRoutes from './src/routes/faculty.mjs';
+import workerRoutes from './src/routes/workers.mjs';
+import announcementRoutes from './src/routes/announcements.mjs';
+import teacherRoutes from './src/routes/teacher.mjs';
 import { setupWebSocket } from './src/websocket/websocket.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,6 +32,20 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// --- MOVE API ROUTES ABOVE STATIC FILE SERVING ---
+// Routes
+app.use('/api', authRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/faculty', facultyRoutes);
+app.use('/api/workers', workerRoutes);
+app.use('/api/students', studentRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api', attendanceRoutes); // Also mount for /api/checkin, /api/simulate-checkin, /api/timeline
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/trust', trustRoutes);
+app.use('/api', insightRoutes);
+app.use('/api/teacher', teacherRoutes);
 
 // Serve frontend static files
 const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
@@ -52,30 +66,20 @@ app.get('/api/healthz', (req, res) => {
   });
 });
 
-// Routes
-app.use('/api', authRoutes);
-app.use('/api/departments', departmentRoutes);
-app.use('/api/faculty', facultyRoutes);
-app.use('/api/workers', workerRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api', attendanceRoutes); // Also mount for /api/checkin, /api/simulate-checkin, /api/timeline
-app.use('/api/announcements', announcementRoutes);
-app.use('/api/trust', trustRoutes);
-app.use('/api', insightRoutes);
-
 // SPA fallback (client-side routes like /scan)
 app.get('*', (req, res, next) => {
   // Don't interfere with API or static assets.
   if (req.path.startsWith('/api') || req.path.startsWith('/avatars') || req.path.startsWith('/static')) {
-    return next();
+    next();
+    return;
   }
   // Only serve the SPA for browser navigations.
   const accept = req.headers.accept || '';
   if (!accept.includes('text/html')) {
-    return next();
+    next();
+    return;
   }
-  return res.sendFile(path.join(frontendPath, 'index.html'));
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 // 404 handler
@@ -97,9 +101,8 @@ async function startServer() {
     console.log('[INFO] Starting PresenceAI backend...');
     console.log('[INFO] BASE_DIR:', __dirname);
     
-    // Initialize database
-    await initDb();
-    console.log('[INFO] Database initialized');
+    // MongoDB is initialized per request; skipping MySQL init
+    console.log('[INFO] Skipping MySQL initialization; using MongoDB only');
     
     // Load known faces
     await loadKnownFaces();

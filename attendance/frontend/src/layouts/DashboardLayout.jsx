@@ -18,14 +18,14 @@ import { useEffect, useRef, useState } from 'react'
 import { cn } from '../utils'
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Attendance', icon: Building2, path: '/attendance' },
-  { label: 'Students', icon: Users, path: '/students' },
-  { label: 'Faculty', icon: GraduationCap, path: '/faculty' },
-  { label: 'Workers', icon: Briefcase, path: '/workers' },
-  { label: 'Library', icon: BookOpenText, path: '/library' },
-  { label: 'Insights', icon: BarChart3, path: '/insights' },
-  { label: 'Announcements', icon: ShieldAlert, path: '/announcements' },
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/portal' },
+  { label: 'Attendance', icon: Building2, path: '/portal/attendance' },
+  { label: 'Students', icon: Users, path: '/portal/students' },
+  { label: 'Faculty', icon: GraduationCap, path: '/portal/faculty' },
+  { label: 'Workers', icon: Briefcase, path: '/portal/workers' },
+  { label: 'Library', icon: BookOpenText, path: '/portal/library' },
+  { label: 'Insights', icon: BarChart3, path: '/portal/insights' },
+  { label: 'Announcements', icon: ShieldAlert, path: '/portal/announcements' },
 ]
 
 export default function DashboardLayout() {

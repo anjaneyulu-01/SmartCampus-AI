@@ -162,25 +162,19 @@ export default function ScanDevicePage() {
   const sendToBackend = async (blobs, abortController) => {
     const fd = new FormData()
     for (let i = 0; i < blobs.length; i++) {
-      fd.append('files', blobs[i], `frame_${Date.now()}_${i}.jpg`)
+      fd.append('file', blobs[i], `frame_${Date.now()}_${i}.jpg`)
     }
-
-    // Use /api/checkin because it already implements multi-frame recognition + attendance marking.
-    const resp = await fetch('/api/checkin', {
+    // Use /api/attendance/scan for single-frame scan
+    const resp = await fetch('http://localhost:8000/api/attendance/scan', {
       method: 'POST',
       body: fd,
       signal: abortController ? abortController.signal : undefined,
     })
-
     const data = await resp.json().catch(() => ({}))
-    
-    // 200 with success: false = no match found (not an error, just retry)
-    // 400+ = actual server error
     if (resp.status >= 400) {
       const err = data?.error || data?.message || `Server error (${resp.status})`
       throw new Error(err)
     }
-
     return data
   }
 

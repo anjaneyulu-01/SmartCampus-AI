@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { dbAll, dbGet, dbRun } from '../database/db.js';
+import { connectMongo, getDb } from '../database/mongo.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { recognizeWithPython } from '../services/faceRecognition.js';
 import { getAvatarUrlForStudent } from '../utils/helpers.js';
@@ -46,15 +46,14 @@ async function processFramesConsensus(frames, _minAgree = 2, _distanceThreshold 
  */
 router.post('/scan', upload.single('file'), async (req, res) => {
   try {
+    await connectMongo();
+    const db = getDb();
     const subject = (req.body?.subject || 'Biometric Scan').toString().trim() || 'Biometric Scan';
-
     // Collect one or more frames.
     const frames = [];
     if (req.file?.buffer) {
       frames.push(req.file.buffer);
     }
-
-    // JSON mode: { images: [base64, ...] }
     if (Array.isArray(req.body?.images)) {
       for (const item of req.body.images) {
         if (!item) continue;
@@ -67,21 +66,15 @@ router.post('/scan', upload.single('file'), async (req, res) => {
         }
       }
     } else if (req.body?.image) {
-      // Single base64 with or without data URL prefix
       const raw = req.body.image.toString();
       const b64 = raw.includes('base64,') ? raw.split('base64,')[1] : raw;
       frames.push(Buffer.from(b64, 'base64'));
     }
-
     if (frames.length === 0) {
       return res.status(400).json({ error: 'image required (file, image base64, or images[] base64)' });
     }
-
-    // Biometric device uses the Python face service for matching.
-    // (Keeps recognition consistent and avoids optional Node face deps.)
     const result = await recognizeWithPython(frames);
     const nowIso = new Date().toISOString();
-
     if (result.status !== 'success' || !result.student_id) {
       const msg = String(result?.message || '').toLowerCase();
       const status = msg.includes('no faces detected') || msg.includes('no face') ? 'no_face' : 'not recognized';
@@ -93,19 +86,20 @@ router.post('/scan', upload.single('file'), async (req, res) => {
         status
       });
     }
-
     const studentId = result.student_id;
-    const student = await dbGet('SELECT id, name FROM students WHERE id = ?', [studentId]);
+    const student = await db.collection('students').findOne({ _id: studentId });
     const name = student?.name || studentId;
-
-    // If already present today, keep the original record and just acknowledge.
-    const existing = await dbGet(
-      `SELECT id, ts FROM attendance_events WHERE student_id = ? AND DATE(ts) = CURDATE() AND type IN ('present','checkin') ORDER BY ts DESC LIMIT 1`,
-      [studentId]
-    );
-
-    if (existing?.id) {
-      const avatarUrl = await getAvatarUrlForStudent(studentId);
+    // Check for existing attendance event today
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const existing = await db.collection('attendance_events').findOne({
+      student_id: studentId,
+      ts: { $gte: today, $lt: tomorrow },
+      type: { $in: ['present','checkin'] }
+    });
+    if (existing) {
       return res.json({
         studentId,
         name,
@@ -113,16 +107,20 @@ router.post('/scan', upload.single('file'), async (req, res) => {
         timestamp: existing.ts,
         status: 'already_marked',
         message: 'Already marked present today',
-        avatarUrl,
+        avatarUrl: student?.avatar_url || null,
       });
     }
-
-    await dbRun(
-      'INSERT INTO attendance_events (student_id, entity_id, entity_type, type, label, subject, confidence_score) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [studentId, studentId, 'student', 'present', 'Biometric scan', subject, Number(result.confidence || 0)]
-    );
-
-    const avatarUrl = await getAvatarUrlForStudent(studentId);
+    // Insert new attendance event
+    await db.collection('attendance_events').insertOne({
+      student_id: studentId,
+      entity_id: studentId,
+      entity_type: 'student',
+      type: 'present',
+      label: 'Biometric scan',
+      subject,
+      confidence_score: Number(result.confidence || 0),
+      ts: new Date()
+    });
     broadcastPresence({
       student_id: studentId,
       name: name,
@@ -130,9 +128,8 @@ router.post('/scan', upload.single('file'), async (req, res) => {
       status: 'Present',
       timestamp: nowIso,
       confidence: Number(result.confidence || 0),
-      avatarUrl
+      avatarUrl: student?.avatar_url || null
     });
-
     return res.json({
       studentId,
       name,
@@ -224,6 +221,7 @@ router.get('/summary', requireAuth, async (req, res) => {
 
 /**
  * POST /api/attendance/mark - Manually mark attendance
+ * Teachers can only mark attendance for students in their assigned classes
  */
 router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res) => {
   try {
@@ -231,6 +229,19 @@ router.post('/mark', requireAuth, requireRole('hod', 'teacher'), async (req, res
     
     if (!student_id) {
       return res.status(400).json({ error: 'student_id required' });
+    }
+    
+    // For teachers: verify student is in one of their assigned classes
+    if (req.user.role === 'teacher') {
+      const student = await dbGet('SELECT class FROM students WHERE id = ?', [student_id]);
+      if (!student) {
+        return res.status(404).json({ error: 'Student not found' });
+      }
+      
+      const teacherClasses = (req.user.assigned_classes || '').split(',').map(c => c.trim()).filter(Boolean);
+      if (!teacherClasses.includes(student.class)) {
+        return res.status(403).json({ error: 'You can only mark attendance for students in your assigned classes' });
+      }
     }
     
     const normalized = (status || 'present').toString().trim().toLowerCase();

@@ -2,11 +2,12 @@ import express from 'express';
 import { connectMongo, getDb } from '../database/mongo.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
-const router = express.Router()
+const router = express.Router();
 
 /**
  * GET /api/workers - Get all workers/staff
  */
+router.get('/', requireAuth, async (req, res) => {
   try {
     await connectMongo();
     const db = getDb();
@@ -27,11 +28,12 @@ const router = express.Router()
     console.error('[ERROR] Get workers:', error);
     res.status(500).json({ error: 'Failed to fetch workers' });
   }
-})
+});
 
 /**
  * GET /api/workers/:id - Get worker details
  */
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     await connectMongo();
     const db = getDb();
@@ -48,11 +50,12 @@ const router = express.Router()
     console.error('[ERROR] Get worker:', error);
     res.status(500).json({ error: 'Failed to fetch worker' });
   }
-})
+});
 
 /**
  * POST /api/workers - Create worker (Admin/HOD only)
  */
+router.post('/', requireAuth, requireRole('admin', 'hod'), async (req, res) => {
   try {
     await connectMongo();
     const db = getDb();
@@ -66,11 +69,12 @@ const router = express.Router()
     console.error('[ERROR] Create worker:', error);
     res.status(500).json({ error: 'Failed to create worker' });
   }
-})
+});
 
 /**
  * PUT /api/workers/:id - Update worker
  */
+router.put('/:id', requireAuth, requireRole('admin', 'hod', 'worker'), async (req, res) => {
   try {
     await connectMongo();
     const db = getDb();
@@ -84,11 +88,12 @@ const router = express.Router()
     console.error('[ERROR] Update worker:', error);
     res.status(500).json({ error: 'Failed to update worker' });
   }
-})
+});
 
 /**
  * GET /api/workers/:id/attendance - Get worker attendance
  */
+router.get('/:id/attendance', requireAuth, async (req, res) => {
   try {
     await connectMongo();
     const db = getDb();
@@ -103,6 +108,6 @@ const router = express.Router()
     console.error('[ERROR] Get worker attendance:', error);
     res.status(500).json({ error: 'Failed to fetch attendance' });
   }
-})
+});
 
 export default router;

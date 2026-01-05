@@ -89,3 +89,20 @@ export function broadcastPresence(payload) {
   });
 }
 
+// Generic event broadcaster (announcements, messages, leave status, etc.)
+export function broadcastEvent(type, payload) {
+  if (!wss) return;
+
+  const message = JSON.stringify({ type, payload });
+  clients.forEach((client) => {
+    if (client.readyState === 1) {
+      try {
+        client.send(message);
+      } catch (error) {
+        console.error('[ERROR] Failed to send WebSocket message:', error);
+        clients.delete(client);
+      }
+    }
+  });
+}
+

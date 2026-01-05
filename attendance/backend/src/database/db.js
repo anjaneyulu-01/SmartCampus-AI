@@ -178,6 +178,41 @@ export async function initDb() {
         FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Create messages table (teacher & hod inbox/sent)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sender VARCHAR(255) NOT NULL,
+        recipient VARCHAR(255) NOT NULL,
+        subject VARCHAR(255),
+        body TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        read_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_recipient (recipient, is_read),
+        INDEX idx_sender (sender)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create leave requests table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS leave_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        teacher_username VARCHAR(255) NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        reason TEXT,
+        status ENUM('pending','approved','rejected') DEFAULT 'pending',
+        approver VARCHAR(255),
+        resolution_note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_teacher (teacher_username),
+        INDEX idx_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
     
     // Create users table
     await db.query(`
@@ -387,10 +422,7 @@ export async function initDb() {
     }
 
     // Seed demo data (safe to re-run)
-    const students = [
-      ['sai', 'Sai', '/avatars/sai.jpg', 1, 1, '92460118732', 'A'],
-      ['image_person', 'Image Person', '/avatars/image_person.jpg', 1, 2, null, 'A']
-    ];
+    const students = [];
     
     for (const [sid, name, avatar, r, c, mobile, cls] of students) {
       await db.query(`
@@ -415,7 +447,7 @@ export async function initDb() {
     }
 
     // Ensure dataset folder names are registered as students so face matches do not 400
-    const datasetStudents = ['Anjaneyulu', 'Rahul', 'Sai', 'Santhosh', 'Venkat'];
+    const datasetStudents = ['Anjaneyulu', 'Rahul', 'Santhosh'];
     for (const sid of datasetStudents) {
       await db.query(`
         INSERT IGNORE INTO students (id, name)
@@ -447,13 +479,7 @@ export async function initDb() {
         INSERT INTO users (username, password_hash, salt, role, display_name, assigned_classes, department_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `, ['teacher', hash2, salt2, 'teacher', 'Demo Teacher', 'A,B', cseDeptId]);
-      
-      // Default Student (demo): sai / 92460118732
-      const { salt: salt3, hash: hash3 } = hashPassword('92460118732');
-      await db.query(`
-        INSERT INTO users (username, password_hash, salt, role, display_name, student_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, ['sai', hash3, salt3, 'student', 'Sai Student', 'sai']);
+
     }
 
     // Ensure demo teacher exists even if table already had users

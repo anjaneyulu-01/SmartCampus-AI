@@ -6,6 +6,7 @@ import https from 'https';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+import { connectMongo, getDb } from '../database/mongo.js';
 const KNOWN_FACES_DIR = path.join(path.dirname(__dirname), '..', 'known_faces');
 const USE_PYTHON_FACE = process.env.USE_PYTHON_FACE === '1';
 // Point to DeepFace Flask matcher by default (new service)
@@ -238,58 +239,51 @@ async function loadModels() {
 export async function loadKnownFaces() {
   try {
     await loadModels();
-    
     knownEncodings = [];
     knownNames = [];
-    
-    if (!fs.existsSync(KNOWN_FACES_DIR)) {
-      fs.mkdirSync(KNOWN_FACES_DIR, { recursive: true });
-      console.log('[INFO] Created known_faces directory');
-      return;
-    }
-    
-    const files = fs.readdirSync(KNOWN_FACES_DIR);
-    const imageFiles = files.filter(f => 
-      /\.(jpg|jpeg|png)$/i.test(f)
-    );
-    
-    // If optional deps are missing, skip silently to avoid noisy errors
+    await connectMongo();
+    const db = getDb();
+    const faceEncodings = await db.collection('face_encodings').find({}).toArray();
     if (!modelsLoaded || !faceapi || !Canvas || !Image) {
       console.log('[INFO] Face recognition models not available, skipping face loading');
       return;
     }
-    
-    if (imageFiles.length === 0) {
-      console.log('[INFO] No known faces to load');
+    if (!faceEncodings.length) {
+      console.log('[INFO] No face_encodings found in MongoDB');
       return;
     }
-    
     const api = faceapi.default || faceapi;
-    
-    for (const file of imageFiles) {
+    for (const entry of faceEncodings) {
       try {
-        const studentId = path.basename(file, path.extname(file));
-        const imagePath = path.join(KNOWN_FACES_DIR, file);
-        
+        const studentId = entry.student_id;
+        // Use face_image_path from MongoDB, fallback to known_faces dir
+        let imagePath = entry.face_image_path;
+        if (imagePath && imagePath.startsWith('/')) {
+          imagePath = path.join(path.dirname(__dirname), '..', imagePath);
+        } else if (imagePath && !path.isAbsolute(imagePath)) {
+          imagePath = path.join(KNOWN_FACES_DIR, imagePath);
+        }
+        if (!fs.existsSync(imagePath)) {
+          console.log(`[WARN] Face image not found for ${studentId}: ${imagePath}`);
+          continue;
+        }
         const image = await api.bufferToImage(fs.readFileSync(imagePath));
         const detection = await api
           .detectSingleFace(image)
           .withFaceLandmarks()
           .withFaceDescriptor();
-        
         if (detection) {
           knownEncodings.push(detection.descriptor);
           knownNames.push(studentId);
-          console.log(`[INFO] Loaded face: ${studentId}`);
+          console.log(`[INFO] Loaded face from MongoDB: ${studentId}`);
         } else {
-          console.log(`[WARN] No face found in ${file}`);
+          console.log(`[WARN] No face found in ${imagePath}`);
         }
       } catch (error) {
-        console.error(`[ERROR] Loading face ${file}:`, error);
+        console.error(`[ERROR] Loading face for ${entry.student_id}:`, error);
       }
     }
-    
-    console.log(`[INFO] Loaded ${knownNames.length} known faces`);
+    console.log(`[INFO] Loaded ${knownNames.length} known faces from MongoDB`);
   } catch (error) {
     console.error('[ERROR] loadKnownFaces:', error);
   }

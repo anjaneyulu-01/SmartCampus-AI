@@ -255,15 +255,12 @@ export default function StudentsPage() {
           >
             <div className="flex items-start justify-between mb-4">
               <div className="text-5xl">
-                {student.avatarUrl ? (
-                  <img
-                    src={student.avatarUrl}
-                    alt={student.name}
-                    className="w-14 h-14 rounded-full object-cover border border-white/10"
-                  />
-                ) : (
-                  '👤'
-                )}
+                <img
+                  src={student.avatarUrl || '/avatars/default.jpg'}
+                  alt={student.name}
+                  className="w-14 h-14 rounded-full object-cover border border-white/10"
+                  onError={(e) => { e.target.onerror = null; e.target.src = '/avatars/default.jpg'; }}
+                />
               </div>
               <button
                 onClick={(e) => {
@@ -300,15 +297,13 @@ export default function StudentsPage() {
               <div className="flex items-center gap-2">
                 <div
                   className={`w-3 h-3 rounded-full ${
-                    student.status === 'present'
+                    (student.status || '').toLowerCase() === 'present'
                       ? 'bg-green-500'
-                      : student.status === 'absent'
-                        ? 'bg-red-500'
-                        : 'bg-yellow-500'
+                      : 'bg-red-500'
                   }`}
                 />
                 <span className="text-sm text-gray-300 capitalize">
-                  {student.status || 'Present'}
+                  {(student.status || '').toLowerCase() === 'present' ? 'Present' : 'Absent'}
                 </span>
                 {student.class && (
                   <span className="ml-auto text-xs text-gray-400 bg-glass px-3 py-1 rounded-full">
@@ -512,7 +507,9 @@ export default function StudentsPage() {
               <div className="md:col-span-1 space-y-3">
                 <div className="bg-glass rounded-xl p-4">
                   <p className="text-gray-400 text-sm">Status</p>
-                  <p className="text-white font-bold mt-1 capitalize">{selectedStudent.status || 'unknown'}</p>
+                  <p className="text-white font-bold mt-1 capitalize">
+                    {(selectedStudent.status || '').toLowerCase() === 'present' ? 'Present' : 'Absent'}
+                  </p>
                 </div>
                 <div className="bg-glass rounded-xl p-4">
                   <p className="text-gray-400 text-sm">Trust Score</p>

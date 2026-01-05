@@ -1,7 +1,11 @@
 import { motion } from 'framer-motion'
 import { MoreVertical } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 export default function AttendanceTable({ records = [] }) {
+  const navigate = useNavigate()
+  const [openMenu, setOpenMenu] = useState(null)
   const getStatusBadge = (status) => {
     const badges = {
       present: { color: 'bg-green-500/20 text-green-300 border-green-500/30', label: '✓ Present' },
@@ -85,10 +89,36 @@ export default function AttendanceTable({ records = [] }) {
                     {badge.label}
                   </span>
                 </td>
-                <td className="py-4 px-4 text-right">
-                  <button className="p-2 hover:bg-glass rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                <td className="py-4 px-4 text-right relative">
+                  <button
+                    className="p-2 hover:bg-glass rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                    onClick={() => setOpenMenu(openMenu === index ? null : index)}
+                    aria-label="Actions"
+                  >
                     <MoreVertical size={16} className="text-gray-400" />
                   </button>
+                  {openMenu === index && (
+                    <div className="absolute right-0 mt-2 w-40 bg-slate-800 border border-white/10 rounded shadow-lg z-10">
+                      <button
+                        className="block w-full text-left px-4 py-2 hover:bg-slate-700 text-sm text-white"
+                        onClick={() => { setOpenMenu(null); navigate(`/portal/students/${record.student_id}`) }}
+                      >
+                        View Student
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2 hover:bg-slate-700 text-sm text-white"
+                        onClick={() => { setOpenMenu(null); navigate(`/portal/attendance/timeline/${record.student_id}`) }}
+                      >
+                        Attendance Timeline
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2 hover:bg-slate-700 text-sm text-red-400"
+                        onClick={() => { setOpenMenu(null); alert('Feature coming soon!') }}
+                      >
+                        Flag as Suspicious
+                      </button>
+                    </div>
+                  )}
                 </td>
               </motion.tr>
             )

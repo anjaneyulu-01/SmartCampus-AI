@@ -1,5 +1,5 @@
 import { getUsernameForToken } from '../utils/token.js';
-import { dbGet } from '../database/db.js';
+import { connectMongo, getDb } from '../database/mongo.js';
 
 /**
  * Authentication middleware
@@ -24,16 +24,13 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
     
-    // Get user from database
-    const user = await dbGet(
-      'SELECT username, role, display_name, student_id, assigned_classes FROM users WHERE username = ?',
-      [username]
-    );
-    
+    // Get user from MongoDB
+    await connectMongo();
+    const db = getDb();
+    const user = await db.collection('users').findOne({ username });
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
-    
     // Attach user to request
     req.user = {
       username: user.username,

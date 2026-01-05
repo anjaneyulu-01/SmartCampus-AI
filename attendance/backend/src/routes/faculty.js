@@ -1,5 +1,6 @@
 import express from 'express'
 import { dbAll, dbGet, dbRun } from '../database/db.js'
+import { connectMongo, getDb } from '../database/mongo.js'
 import { requireAuth, requireRole } from '../middleware/auth.js'
 
 const router = express.Router()
@@ -23,7 +24,28 @@ router.get('/', requireAuth, async (req, res) => {
     }
 
     query += ' ORDER BY f.name ASC'
-    const faculty = await dbAll(query, params)
+    await connectMongo();
+    const db = getDb();
+    const filter = {};
+    if (department_id) {
+      filter.department_id = department_id;
+    }
+    const faculty = await db.collection('faculty').aggregate([
+      { $match: filter },
+      { $sort: { name: 1 } },
+      { $lookup: {
+          from: 'departments',
+          localField: 'department_id',
+          foreignField: '_id',
+          as: 'department'
+        }
+      },
+      { $unwind: { path: '$department', preserveNullAndEmptyArrays: true } },
+      { $addFields: {
+          department_name: '$department.name'
+        }
+      }
+    ]).toArray();
     res.json(faculty)
   } catch (error) {
     console.error('[ERROR] Get faculty:', error)
@@ -51,6 +73,32 @@ router.get('/:id', requireAuth, async (req, res) => {
     console.error('[ERROR] Get faculty:', error)
     res.status(500).json({ error: 'Failed to fetch faculty' })
   }
+  try {
+    await connectMongo();
+    const db = getDb();
+    const faculty = await db.collection('faculty').aggregate([
+      { $match: { _id: req.params.id } },
+      { $lookup: {
+          from: 'departments',
+          localField: 'department_id',
+          foreignField: '_id',
+          as: 'department'
+        }
+      },
+      { $unwind: { path: '$department', preserveNullAndEmptyArrays: true } },
+      { $addFields: {
+          department_name: '$department.name'
+        }
+      }
+    ]).toArray();
+    if (!faculty || faculty.length === 0) {
+      return res.status(404).json({ error: 'Faculty not found' });
+    }
+    res.json(faculty[0]);
+  } catch (error) {
+    console.error('[ERROR] Get faculty:', error);
+    res.status(500).json({ error: 'Failed to fetch faculty' });
+  }
 })
 
 /**
@@ -73,6 +121,30 @@ router.post('/', requireAuth, requireRole('admin', 'hod'), async (req, res) => {
   } catch (error) {
     console.error('[ERROR] Create faculty:', error)
     res.status(500).json({ error: 'Failed to create faculty' })
+  }
+  try {
+    await connectMongo();
+    const db = getDb();
+    const { name, email, phone, department_id, designation, specialization, office_room } = req.body;
+    if (!name || !email || !department_id) {
+      return res.status(400).json({ error: 'Name, email, and department_id required' });
+    }
+    const doc = {
+      _id: req.body.id || email,
+      name,
+      email,
+      phone,
+      department_id,
+      designation,
+      specialization,
+      office_room,
+      created_at: new Date()
+    };
+    await db.collection('faculty').insertOne(doc);
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('[ERROR] Create faculty:', error);
+    res.status(500).json({ error: 'Failed to create faculty' });
   }
 })
 

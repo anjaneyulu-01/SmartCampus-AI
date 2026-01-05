@@ -3,7 +3,6 @@ import { connectMongo, getDb } from '../database/mongo.js';
 
 const router = express.Router();
 
-
 /**
  * GET /api/insights - Get insights
  */
@@ -27,4 +26,3 @@ router.get('/insights', async (req, res) => {
 });
 
 export default router;
-

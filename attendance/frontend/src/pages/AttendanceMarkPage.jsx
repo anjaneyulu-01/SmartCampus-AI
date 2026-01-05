@@ -135,7 +135,7 @@ export default function AttendanceMarkPage() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-          <button className="btn-secondary px-4 py-2" onClick={() => navigate(`/attendance/${deptId}`)}>
+          <button className="btn-secondary px-4 py-2" onClick={() => navigate(`/portal/attendance/${deptId}`)}>
             Back to Sections
           </button>
         </div>

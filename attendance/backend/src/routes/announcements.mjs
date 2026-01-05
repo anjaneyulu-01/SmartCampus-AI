@@ -44,37 +44,4 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/announcements
- * Body: title, message, (optional) department_id
- */
-router.post('/', requireAuth, requireRole('admin', 'hod'), async (req, res) => {
-  try {
-    await connectMongo();
-    const db = getDb();
-    const { title, message, department_id } = req.body;
-    if (!title || !message) {
-      return res.status(400).json({ error: 'title and message required' });
-    }
-    const doc = {
-      title,
-      message,
-      department_id: department_id || null,
-      created_by: req.user.username,
-      created_at: new Date()
-    };
-    const result = await db.collection('announcements').insertOne(doc);
-    const created = await db.collection('announcements').findOne({ _id: result.insertedId });
-    try {
-      broadcastEvent('announcement:new', created);
-    } catch (e) {
-      console.warn('[WARN] broadcast announcement failed', e);
-    }
-    res.status(201).json(created);
-  } catch (error) {
-    console.error('[ERROR] Create announcement:', error);
-    res.status(500).json({ error: 'Failed to create announcement' });
-  }
-});
-
 export default router;

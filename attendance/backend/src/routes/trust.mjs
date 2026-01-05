@@ -3,7 +3,6 @@ import { connectMongo, getDb } from '../database/mongo.js';
 
 const router = express.Router();
 
-
 /**
  * GET /api/trust/:student_id - Get trust score for a student
  */
@@ -65,11 +64,9 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
-
 /**
  * GET /api/seats - Get seat map
  */
-
 router.get('/seats', async (req, res) => {
   try {
     await connectMongo();
@@ -93,4 +90,3 @@ router.get('/seats', async (req, res) => {
 });
 
 export default router;
-

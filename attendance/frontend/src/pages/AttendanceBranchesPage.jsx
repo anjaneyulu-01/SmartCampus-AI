@@ -42,7 +42,7 @@ export default function AttendanceBranchesPage() {
           {branches.map((b) => (
             <button
               key={b.id}
-              onClick={() => navigate(`/attendance/${b.id}`)}
+              onClick={() => navigate(`/portal/attendance/${b.id}`)}
               className="card p-6 text-left hover:bg-white/5 transition-colors"
             >
               <div className="flex items-start justify-between gap-4">
