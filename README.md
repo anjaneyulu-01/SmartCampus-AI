@@ -1,5 +1,7 @@
 # SmartCampus-AI: Face Recognition Attendance System
 
+_Last updated: January 6, 2026_
+
 ## Overview
 SmartCampus-AI is a comprehensive attendance management system that leverages face recognition technology for secure and automated attendance tracking. It features a modern React frontend and a robust Node.js/Python backend, supporting both MongoDB and MySQL databases.
 
