@@ -1,26 +1,74 @@
-# SmartCampus-AI
+# SmartCampus-AI: Face Recognition Attendance System
 
-This project is a Face Recognition Attendance System with a React frontend and Node.js/Python backend.
+## Overview
+SmartCampus-AI is a comprehensive attendance management system that leverages face recognition technology for secure and automated attendance tracking. It features a modern React frontend and a robust Node.js/Python backend, supporting both MongoDB and MySQL databases.
+
+---
+
+## System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Frontend
+        A[React App]
+    end
+    subgraph Backend
+        B[Node.js Server] --> C[Python Face Recognition]
+        B --> D[MongoDB]
+        B --> E[MySQL]
+    end
+    A <--> B
+    C <--> D
+    C <--> E
+```
+
+---
 
 ## Features
-- Face scanning and recognition
-- Attendance management
-- Teacher and student dashboards
-- MongoDB and MySQL support
-- Real-time updates
+- Face scanning and recognition for attendance
+- Real-time dashboard for teachers and students
+- Secure authentication and role-based access
+- Data storage in MongoDB and MySQL
+- Easy deployment and scalability
 
-## Structure
-- `attendance/backend/` - Node.js & Python backend
-- `attendance/frontend/` - React frontend
+---
+
+## Folder Structure
+```
+attendance/
+  backend/    # Node.js & Python backend
+  frontend/   # React frontend
+```
+
+---
 
 ## Quick Start
-1. Clone the repository
-2. Install dependencies in both backend and frontend
-3. Configure environment variables
-4. Start backend and frontend servers
+1. **Clone the repository**
+2. **Install dependencies**
+   - Backend: `cd attendance/backend && npm install`
+   - Frontend: `cd attendance/frontend && npm install`
+3. **Configure environment variables**
+   - Copy `.env.example` to `.env` and update values
+4. **Start servers**
+   - Backend: `npm start` or `python python_recognition.py`
+   - Frontend: `npm run dev`
+
+---
 
 ## Deployment
-See deployment instructions in the project documentation.
+- See deployment instructions in the project documentation or ask for cloud setup help.
+
+---
 
 ## License
 MIT
+
+---
+
+## Example Dashboard
+![Dashboard Example](https://raw.githubusercontent.com/anjaneyulu-01/SmartCampus-AI/main/assets/dashboard_example.png)
+
+---
+
+## Contact & Support
+For issues or feature requests, open a GitHub issue or contact the maintainer.
